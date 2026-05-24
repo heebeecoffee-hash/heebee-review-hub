@@ -543,7 +543,7 @@ body.signed-in .bottom-nav { display:flex; }
   }
   .side-nav {
     display:flex; flex-direction:column; gap:4px;
-    padding:14px 10px; position:sticky; top:18px;
+    padding:14px 10px; position:sticky; top:80px;
   }
   .side-nav .nav-item {
     flex-direction:row; justify-content:flex-start; gap:12px;
@@ -583,6 +583,15 @@ body.signed-in .bottom-nav { display:flex; }
   color:var(--text3); margin-top:6px; }
 .stat-sub.up   { color:var(--success); }
 .stat-sub.down { color:var(--danger); }
+.stat-delta {
+  font-family:'Space Mono',monospace; font-size:.58rem; letter-spacing:1px;
+  margin-top:5px; display:flex; align-items:center; gap:4px;
+}
+.stat-delta.up   { color:var(--success); }
+.stat-delta.down { color:var(--danger); }
+.stat-delta.flat { color:var(--text3); }
+.dash-period-wrap { display:flex; gap:6px; }
+.dash-period-wrap .chip { padding:6px 12px; font-size:.5rem; }
 
 /* CHART (CSS bars) */
 .chart-card { padding:18px 16px; margin-bottom:14px; }
@@ -737,9 +746,15 @@ body.signed-in .bottom-nav { display:flex; }
               <div class="panel-sub">Overview</div>
               <div class="panel-title">Dashboard</div>
             </div>
+            <!-- Period selector -->
+            <div class="dash-period-wrap">
+              <button class="chip" data-period="week">Week</button>
+              <button class="chip on" data-period="month">Month</button>
+              <button class="chip" data-period="ytd">YTD</button>
+            </div>
           </div>
 
-          <!-- Ratings Strip (moved up — primary KPIs) -->
+          <!-- Ratings Strip -->
           <div class="rstrip" id="ratingsStrip">
             <div class="rcard google"><div class="rlabel">Google</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
             <div class="rcard zomato"><div class="rlabel">Zomato</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
@@ -748,15 +763,42 @@ body.signed-in .bottom-nav { display:flex; }
           </div>
 
           <div class="stat-grid" id="dashStats">
-            <div class="glass stat-card"><div class="stat-label">Total reviews</div><div class="stat-value" id="stTotal">—</div><div class="stat-sub" id="stTotalSub">&nbsp;</div></div>
-            <div class="glass stat-card"><div class="stat-label">Avg rating</div><div class="stat-value" id="stAvg">—</div><div class="stat-sub" id="stAvgSub">&nbsp;</div></div>
-            <div class="glass stat-card"><div class="stat-label">Unread</div><div class="stat-value" id="stUnread">—</div><div class="stat-sub" id="stUnreadSub">&nbsp;</div></div>
-            <div class="glass stat-card"><div class="stat-label">Pending reply</div><div class="stat-value" id="stPending">—</div><div class="stat-sub" id="stPendingSub">&nbsp;</div></div>
+            <div class="glass stat-card">
+              <div class="stat-label">Total reviews</div>
+              <div class="stat-value" id="stTotal">—</div>
+              <div class="stat-sub" id="stTotalSub">&nbsp;</div>
+              <div class="stat-delta" id="stTotalDelta"></div>
+            </div>
+            <div class="glass stat-card">
+              <div class="stat-label">Avg rating</div>
+              <div class="stat-value" id="stAvg">—</div>
+              <div class="stat-sub" id="stAvgSub">&nbsp;</div>
+              <div class="stat-delta" id="stAvgDelta"></div>
+            </div>
+            <div class="glass stat-card">
+              <div class="stat-label">Unread</div>
+              <div class="stat-value" id="stUnread">—</div>
+              <div class="stat-sub" id="stUnreadSub">&nbsp;</div>
+              <div class="stat-delta" id="stUnreadDelta"></div>
+            </div>
+            <div class="glass stat-card">
+              <div class="stat-label">Pending reply</div>
+              <div class="stat-value" id="stPending">—</div>
+              <div class="stat-sub" id="stPendingSub">&nbsp;</div>
+              <div class="stat-delta" id="stPendingDelta"></div>
+            </div>
           </div>
 
+          <!-- Platform breakdown for current period -->
           <div class="glass chart-card">
-            <div class="chart-title">This week's activity</div>
-            <div id="weekActivity"></div>
+            <div class="chart-title" id="dashPeriodLabel">This month — by platform</div>
+            <div id="dashPlatformBars"></div>
+          </div>
+
+          <!-- Activity over time -->
+          <div class="glass chart-card">
+            <div class="chart-title" id="dashActivityLabel">Daily activity</div>
+            <div id="dashActivity"></div>
           </div>
         </section>
 
@@ -1809,51 +1851,172 @@ document.querySelectorAll('.nav-item').forEach(el => {
 });
 
 // ═══════════════════════════════════════════════════════
-// DASHBOARD PANEL
+// DASHBOARD PANEL — period-aware with % comparison
 // ═══════════════════════════════════════════════════════
+state.dashPeriod = 'month'; // default
+
+// Wire period buttons
+document.querySelectorAll('.dash-period-wrap .chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dash-period-wrap .chip').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    state.dashPeriod = btn.dataset.period;
+    renderDashboardPanel();
+  });
+});
+
+function _periodRange(period) {
+  const now = new Date();
+  let curStart, curEnd, prevStart, prevEnd;
+  if (period === 'week') {
+    // current 7 days vs previous 7 days
+    const ms7 = 7 * 86400000;
+    curEnd   = now.getTime();
+    curStart = curEnd - ms7;
+    prevEnd  = curStart;
+    prevStart = prevEnd - ms7;
+  } else if (period === 'month') {
+    // current calendar month vs previous calendar month
+    curStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    curEnd   = now.getTime();
+    const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    prevStart = prevM.getTime();
+    prevEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999).getTime();
+  } else {
+    // YTD: Jan 1 this year vs Jan 1 last year to Dec 31 last year
+    curStart  = new Date(now.getFullYear(), 0, 1).getTime();
+    curEnd    = now.getTime();
+    prevStart = new Date(now.getFullYear() - 1, 0, 1).getTime();
+    prevEnd   = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).getTime();
+  }
+  return { curStart, curEnd, prevStart, prevEnd };
+}
+
+function _reviewTimestamp(r) {
+  if (r.timestamp && !isNaN(Number(r.timestamp))) return Number(r.timestamp);
+  if (r.date) { const d = Date.parse(r.date); if (!isNaN(d)) return d; }
+  return null;
+}
+
+function _filterByRange(reviews, start, end) {
+  return reviews.filter(r => {
+    const t = _reviewTimestamp(r);
+    return t !== null && t >= start && t <= end;
+  });
+}
+
+function _delta(cur, prev, higherIsBetter = true) {
+  if (prev === 0 && cur === 0) return { text: '— no change', cls: 'flat' };
+  if (prev === 0) return { text: '▲ new', cls: higherIsBetter ? 'up' : 'down' };
+  const pct = ((cur - prev) / prev * 100);
+  const sign = pct > 0 ? '▲' : pct < 0 ? '▼' : '—';
+  const cls  = pct > 0 ? (higherIsBetter ? 'up' : 'down')
+             : pct < 0 ? (higherIsBetter ? 'down' : 'up') : 'flat';
+  const label = Math.abs(pct) < 0.5 ? 'no change' : Math.abs(pct).toFixed(0) + '% vs prev';
+  return { text: sign + ' ' + label, cls };
+}
+
 function renderDashboardPanel() {
-  const reviews = state.reviews || [];
-  const total = reviews.length;
-  const unread = reviews.filter(r => !r.read).length;
-  const pending = reviews.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status).length;
-  const rated = reviews.filter(r => Number(r.rating) > 0);
-  const avg = rated.length ? (rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length) : 0;
+  const allReviews = state.reviews || [];
+  const { curStart, curEnd, prevStart, prevEnd } = _periodRange(state.dashPeriod);
+  const cur  = _filterByRange(allReviews, curStart, curEnd);
+  const prev = _filterByRange(allReviews, prevStart, prevEnd);
 
-  $('#stTotal').textContent   = total.toLocaleString();
-  $('#stAvg').textContent     = avg ? avg.toFixed(2) : '—';
-  $('#stUnread').textContent  = unread.toLocaleString();
-  $('#stPending').textContent = pending.toLocaleString();
+  const periodLabel = state.dashPeriod === 'week'  ? 'This week'
+                    : state.dashPeriod === 'month' ? 'This month'
+                    : 'Year to date';
 
-  // Sub stats — count by platform
-  const byPlat = {};
-  reviews.forEach(r => { byPlat[r.platform] = (byPlat[r.platform] || 0) + 1; });
-  $('#stTotalSub').textContent  = Object.keys(byPlat).map(k => byPlat[k] + ' ' + platName(k)).join(' · ');
-  $('#stAvgSub').textContent    = rated.length + ' rated';
+  // ── KPI cards ──────────────────────────────────────
+  // Total
+  const d1 = _delta(cur.length, prev.length);
+  $('#stTotal').textContent     = cur.length.toLocaleString();
+  $('#stTotalSub').textContent  = periodLabel;
+  $('#stTotalDelta').textContent = d1.text;
+  $('#stTotalDelta').className   = 'stat-delta ' + d1.cls;
+
+  // Avg rating
+  const curRated  = cur.filter(r  => Number(r.rating) > 0);
+  const prevRated = prev.filter(r => Number(r.rating) > 0);
+  const curAvg  = curRated.length  ? curRated.reduce((s,r)  => s + Number(r.rating), 0)  / curRated.length  : 0;
+  const prevAvg = prevRated.length ? prevRated.reduce((s,r) => s + Number(r.rating), 0) / prevRated.length : 0;
+  const d2 = _delta(Math.round(curAvg * 10), Math.round(prevAvg * 10));
+  $('#stAvg').textContent     = curAvg ? curAvg.toFixed(2) : '—';
+  $('#stAvgSub').textContent  = curRated.length + ' rated';
+  $('#stAvgDelta').textContent = d2.text;
+  $('#stAvgDelta').className   = 'stat-delta ' + d2.cls;
+
+  // Unread (all-time — not period filtered, since it's a current state)
+  const unread  = allReviews.filter(r => !r.read).length;
+  $('#stUnread').textContent    = unread.toLocaleString();
   $('#stUnreadSub').textContent = unread === 0 ? 'All caught up' : 'Needs attention';
   $('#stUnreadSub').className   = 'stat-sub ' + (unread === 0 ? 'up' : 'down');
+  $('#stUnreadDelta').textContent = '';
+
+  // Pending (all-time state)
+  const pending = allReviews.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status).length;
+  const prevPending = prev.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status).length;
+  const d4 = _delta(pending, prevPending, false); // lower is better
+  $('#stPending').textContent    = pending.toLocaleString();
   $('#stPendingSub').textContent = pending === 0 ? 'All replied' : 'Awaiting reply';
   $('#stPendingSub').className   = 'stat-sub ' + (pending === 0 ? 'up' : 'down');
+  $('#stPendingDelta').textContent = d4.text;
+  $('#stPendingDelta').className   = 'stat-delta ' + d4.cls;
 
-  // This week's activity — last 7 days, by day
-  const now = Date.now();
+  // ── Platform breakdown for current period ──────────
+  const plats = ['google','zomato','swiggy','heebee'];
+  const platCounts = plats.map(p => ({ key:p, label:platName(p), count: cur.filter(r => r.platform===p).length }));
+  const maxP = Math.max(1, ...platCounts.map(x => x.count));
+  $('#dashPeriodLabel').textContent = periodLabel + ' — by platform';
+  $('#dashPlatformBars').innerHTML = platCounts.map(x => `
+    <div class="bar-row">
+      <div class="bar-label">${esc(x.label)}</div>
+      <div class="bar-track"><div class="bar-fill ${x.key}" style="width:${(x.count/maxP*100)}%"></div></div>
+      <div class="bar-val">${x.count}</div>
+    </div>`).join('');
+
+  // ── Activity chart (buckets by day/week) ───────────
   const day = 86400000;
-  const buckets = []; // [{label, count}]
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now - i * day);
-    const label = d.toLocaleDateString('en-US', { weekday: 'short' });
-    const start = new Date(d); start.setHours(0,0,0,0);
-    const end   = new Date(d); end.setHours(23,59,59,999);
-    const count = reviews.filter(r => {
-      const t = r.timestamp || (r.date ? Date.parse(r.date) : null);
-      return t && t >= +start && t <= +end;
-    }).length;
-    buckets.push({ label, count });
+  let buckets = [];
+  if (state.dashPeriod === 'week') {
+    // 7 individual days
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(curEnd - i * day);
+      const s = new Date(d); s.setHours(0,0,0,0);
+      const e = new Date(d); e.setHours(23,59,59,999);
+      buckets.push({
+        label: d.toLocaleDateString('en-US',{weekday:'short'}),
+        count: _filterByRange(allReviews, +s, +e).length
+      });
+    }
+    $('#dashActivityLabel').textContent = 'Daily activity — this week';
+  } else if (state.dashPeriod === 'month') {
+    // Daily buckets for current month
+    const now2 = new Date();
+    const daysInMonth = new Date(now2.getFullYear(), now2.getMonth()+1, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const s = new Date(now2.getFullYear(), now2.getMonth(), d, 0,0,0,0);
+      const e = new Date(now2.getFullYear(), now2.getMonth(), d, 23,59,59,999);
+      buckets.push({ label: String(d), count: _filterByRange(allReviews, +s, +e).length });
+    }
+    $('#dashActivityLabel').textContent = 'Daily activity — this month';
+  } else {
+    // YTD — monthly buckets
+    const now2 = new Date();
+    for (let m = 0; m <= now2.getMonth(); m++) {
+      const s = new Date(now2.getFullYear(), m, 1);
+      const e = new Date(now2.getFullYear(), m+1, 0, 23, 59, 59, 999);
+      buckets.push({
+        label: s.toLocaleDateString('en-US',{month:'short'}),
+        count: _filterByRange(allReviews, +s, +e).length
+      });
+    }
+    $('#dashActivityLabel').textContent = 'Monthly activity — YTD';
   }
-  const max = Math.max(1, ...buckets.map(b => b.count));
-  $('#weekActivity').innerHTML = buckets.map(b => `
+  const maxA = Math.max(1, ...buckets.map(b => b.count));
+  $('#dashActivity').innerHTML = buckets.map(b => `
     <div class="bar-row">
       <div class="bar-label">${b.label}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(b.count/max*100)}%"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxA*100)}%"></div></div>
       <div class="bar-val">${b.count}</div>
     </div>`).join('');
 }
