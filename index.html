@@ -589,6 +589,85 @@ body.light .dash-sticky { background:rgba(245,245,247,.6); }
 body.dark  .reviews-sticky,
 body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
 
+/* ── PLATFORM HEALTH CARDS ───────────────────────── */
+.plat-health-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+@media (max-width:700px) { .plat-health-grid { grid-template-columns:repeat(2,1fr); } }
+.plat-card {
+  padding:18px 14px; border-radius:20px; position:relative; overflow:hidden;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:var(--shadow);
+  transition:transform .25s ease, box-shadow .3s ease, background .5s ease;
+}
+.plat-card:hover { transform:translateY(-2px); box-shadow:var(--shadow2); }
+.plat-card::before {
+  content:''; position:absolute; inset:0; opacity:.10; pointer-events:none;
+  transition:opacity .4s ease;
+}
+.plat-card:hover::before { opacity:.16; }
+.plat-card.google::before { background:var(--google); }
+.plat-card.zomato::before { background:var(--zomato); }
+.plat-card.swiggy::before { background:var(--swiggy); }
+.plat-card.heebee::before { background:var(--heebee); }
+.plat-name { font-family:'Space Mono',monospace; font-size:.48rem; letter-spacing:3px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
+.plat-avg  { font-family:'Nunito Sans',sans-serif; font-weight:200; font-size:2.2rem;
+  line-height:1; color:var(--text); }
+.plat-stars-row { font-size:.65rem; margin:5px 0 4px; }
+.plat-count { font-family:'Space Mono',monospace; font-size:.48rem; color:var(--text3);
+  letter-spacing:1px; }
+.plat-delta-badge {
+  display:inline-flex; align-items:center; gap:3px; margin-top:8px;
+  font-family:'Space Mono',monospace; font-size:.48rem; letter-spacing:1px;
+  padding:3px 7px; border-radius:20px;
+}
+.plat-delta-badge.up   { background:rgba(46,125,50,.15); color:var(--success); }
+.plat-delta-badge.down { background:rgba(198,40,40,.15); color:var(--danger); }
+.plat-delta-badge.flat { background:var(--surface2); color:var(--text3); }
+
+/* ── KPI TILES ───────────────────────────────────── */
+.kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+@media (max-width:700px) { .kpi-strip { grid-template-columns:repeat(2,1fr); } }
+.kpi-tile {
+  padding:16px 14px; border-radius:18px;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:var(--shadow);
+  transition:background .5s ease, border-color .5s ease;
+}
+.kpi-label { font-family:'Space Mono',monospace; font-size:.48rem; letter-spacing:2.5px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:8px; }
+.kpi-value { font-family:'Nunito Sans',sans-serif; font-weight:200; font-size:1.7rem;
+  line-height:1; color:var(--text); }
+.kpi-delta { font-family:'Space Mono',monospace; font-size:.48rem; letter-spacing:1px;
+  margin-top:6px; }
+.kpi-delta.up   { color:var(--success); }
+.kpi-delta.down { color:var(--danger); }
+.kpi-delta.flat { color:var(--text3); }
+
+/* ── STACKED BAR ─────────────────────────────────── */
+.stacked-bar { display:flex; height:100%; overflow:hidden; border-radius:4px; }
+.stacked-seg { height:100%; transition:width .7s cubic-bezier(.4,0,.2,1); flex-shrink:0; }
+.chart-legend { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+.legend-item { display:flex; align-items:center; gap:5px;
+  font-family:'Space Mono',monospace; font-size:.46rem; letter-spacing:1.5px;
+  text-transform:uppercase; color:var(--text3); }
+.legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* ── INSIGHTS ROW ────────────────────────────────── */
+.insight-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px; }
+@media (min-width:600px) { .insight-grid { grid-template-columns:repeat(4,1fr); } }
+.insight-tile {
+  padding:14px 12px; border-radius:16px;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+}
+.insight-label { font-family:'Space Mono',monospace; font-size:.46rem; letter-spacing:2px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:6px; }
+.insight-value { font-size:.9rem; color:var(--text); font-weight:400; line-height:1.3; }
+.insight-sub { font-family:'Space Mono',monospace; font-size:.46rem;
+  color:var(--text3); margin-top:5px; letter-spacing:1px; }
+
 /* Section header inside a panel */
 .panel-head {
   display:flex; align-items:center; justify-content:space-between;
@@ -790,45 +869,54 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
             </div>
           </div>
 
-          <!-- ① Per-platform avg rating WITH comparison -->
-          <div class="glass chart-card" style="margin-bottom:14px;">
-            <div class="chart-title" id="dashPlatRatingLabel">Avg rating — this month vs last month</div>
-            <div id="dashPlatRating"></div>
+          <!-- ① Platform health — 4 cards with ▲▼ vs period -->
+          <div class="plat-health-grid" id="platHealthGrid"></div>
+
+          <!-- ② KPI tiles -->
+          <div class="kpi-strip">
+            <div class="kpi-tile">
+              <div class="kpi-label">Reviews received</div>
+              <div class="kpi-value" id="stTotal">—</div>
+              <div class="kpi-delta" id="stTotalDelta"></div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-label">Response rate</div>
+              <div class="kpi-value" id="stRespRate">—</div>
+              <div class="kpi-delta" id="stRespRateDelta"></div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-label">Low ★ alerts</div>
+              <div class="kpi-value" id="stLowStar">—</div>
+              <div class="kpi-delta" id="stLowStarDelta"></div>
+            </div>
+            <div class="kpi-tile">
+              <div class="kpi-label">Unread now</div>
+              <div class="kpi-value" id="stUnread">—</div>
+              <div class="kpi-delta" id="stUnreadSub" style="color:var(--text3);"></div>
+            </div>
           </div>
 
-          <!-- ② 3 clean KPIs: Reviews received · Response rate · Unread now -->
-          <div class="stat-grid" id="dashStats" style="grid-template-columns:repeat(3,1fr);">
-            <div class="glass stat-card">
-              <div class="stat-label">Reviews received</div>
-              <div class="stat-value" id="stTotal">—</div>
-              <div class="stat-sub" id="stTotalSub">&nbsp;</div>
-              <div class="stat-delta" id="stTotalDelta"></div>
+          <!-- ③ Stacked activity chart -->
+          <div class="glass chart-card">
+            <div class="chart-title" id="dashActivityLabel">Daily activity</div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-dot" style="background:var(--google)"></span>Google</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--zomato)"></span>Zomato</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--swiggy)"></span>Swiggy</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--heebee)"></span>In-Store</span>
             </div>
-            <div class="glass stat-card">
-              <div class="stat-label">Response rate</div>
-              <div class="stat-value" id="stRespRate">—</div>
-              <div class="stat-sub" id="stRespRateSub">&nbsp;</div>
-              <div class="stat-delta" id="stRespRateDelta"></div>
-            </div>
-            <div class="glass stat-card">
-              <div class="stat-label">Unread now</div>
-              <div class="stat-value" id="stUnread">—</div>
-              <div class="stat-sub" id="stUnreadSub">&nbsp;</div>
-            </div>
+            <div id="dashActivity"></div>
           </div>
 
-          <!-- ③ Ratings strip (all-time from API) -->
-          <div class="rstrip" id="ratingsStrip" style="margin-bottom:14px;">
+          <!-- ④ Insight tiles -->
+          <div class="insight-grid" id="dashInsights"></div>
+
+          <!-- hidden rstrip kept for renderRatings() compatibility -->
+          <div style="display:none;" id="ratingsStrip">
             <div class="rcard google"><div class="rlabel">Google</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
             <div class="rcard zomato"><div class="rlabel">Zomato</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
             <div class="rcard swiggy"><div class="rlabel">Swiggy</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
             <div class="rcard heebee"><div class="rlabel">In-Store</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
-          </div>
-
-          <!-- ④ Activity over time -->
-          <div class="glass chart-card">
-            <div class="chart-title" id="dashActivityLabel">Daily activity</div>
-            <div id="dashActivity"></div>
           </div>
         </section>
 
@@ -892,20 +980,36 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
           </div>
 
           <div class="glass chart-card">
-            <div class="chart-title">Reviews by platform</div>
+            <div class="chart-title">Volume by platform</div>
             <div id="chartByPlatform"></div>
           </div>
           <div class="glass chart-card">
-            <div class="chart-title">Reviews by branch</div>
+            <div class="chart-title">Avg ★ rating by branch</div>
+            <div id="chartByBranchRating"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Volume by branch</div>
             <div id="chartByBranch"></div>
           </div>
           <div class="glass chart-card">
-            <div class="chart-title">Rating distribution</div>
+            <div class="chart-title">Rating distribution (1 – 5 ★)</div>
             <div id="chartByRating"></div>
           </div>
           <div class="glass chart-card">
             <div class="chart-title">Reply status</div>
             <div id="chartByStatus"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Response rate by platform</div>
+            <div id="chartRespByPlat"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Reviews by day of week</div>
+            <div id="chartByDow"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Low ★ (1–2) by platform</div>
+            <div id="chartLowByPlat"></div>
           </div>
         </section>
 
@@ -1955,90 +2059,106 @@ function _delta(cur, prev, higherIsBetter = true) {
   return { text: sign + ' ' + label, cls };
 }
 
+// ── helpers ──────────────────────────────────────────
 function _platAvg(reviews, platform) {
   const r = reviews.filter(x => x.platform === platform && Number(x.rating) > 0);
-  return r.length ? r.reduce((s,x) => s + Number(x.rating), 0) / r.length : null;
+  return r.length ? { avg: r.reduce((s,x) => s + Number(x.rating), 0) / r.length, count: r.length } : null;
+}
+const PLAT_CSS = { google:'var(--google)', zomato:'var(--zomato)', swiggy:'var(--swiggy)', heebee:'var(--heebee)' };
+
+function _stackedBar(platCounts, maxTotal) {
+  const total = Object.values(platCounts).reduce((s,v) => s+v, 0);
+  if (total === 0 || maxTotal === 0) return `<div class="bar-track"><div class="stacked-bar"></div></div>`;
+  const segs = ['google','zomato','swiggy','heebee']
+    .filter(p => platCounts[p] > 0)
+    .map(p => {
+      const w = (platCounts[p] / maxTotal * 100).toFixed(1);
+      return `<div class="stacked-seg" style="width:${w}%;background:${PLAT_CSS[p]}" title="${platName(p)}: ${platCounts[p]}"></div>`;
+    }).join('');
+  return `<div class="bar-track"><div class="stacked-bar">${segs}</div></div>`;
+}
+
+function _deltaLabel(cur, prev, higherIsBetter = true, suffix = '') {
+  if (prev === 0 && cur === 0) return { text:'— no data', cls:'flat' };
+  if (prev === 0) return { text:'▲ new', cls: higherIsBetter ? 'up' : 'down' };
+  const pct = ((cur - prev) / prev * 100);
+  if (Math.abs(pct) < 0.5) return { text:'— no change', cls:'flat' };
+  const sign = pct > 0 ? '▲' : '▼';
+  const cls  = pct > 0 ? (higherIsBetter ? 'up' : 'down') : (higherIsBetter ? 'down' : 'up');
+  return { text: sign + ' ' + Math.abs(pct).toFixed(0) + '%' + suffix, cls };
 }
 
 function renderDashboardPanel() {
-  const allReviews = state.reviews || [];
+  const all  = state.reviews || [];
   const { curStart, curEnd, prevStart, prevEnd } = _periodRange(state.dashPeriod);
-  const cur  = _filterByRange(allReviews, curStart, curEnd);
-  const prev = _filterByRange(allReviews, prevStart, prevEnd);
+  const cur  = _filterByRange(all, curStart, curEnd);
+  const prev = _filterByRange(all, prevStart, prevEnd);
+  const plLabel = state.dashPeriod === 'week' ? 'This week' : state.dashPeriod === 'month' ? 'This month' : 'YTD';
+  const pvLabel = state.dashPeriod === 'week' ? 'prev week' : state.dashPeriod === 'month' ? 'last month' : 'last year';
 
-  const periodLabel = state.dashPeriod === 'week'  ? 'This week'
-                    : state.dashPeriod === 'month' ? 'This month'
-                    : 'Year to date';
-  const prevLabel   = state.dashPeriod === 'week'  ? 'prev week'
-                    : state.dashPeriod === 'month' ? 'last month'
-                    : 'last year';
-
-  // ① Per-platform avg rating with comparison ──────────
-  const plats = [
+  // ① Platform health cards ────────────────────────────
+  const platDefs = [
     { key:'google', label:'Google' },
     { key:'zomato', label:'Zomato' },
+    { key:'swiggy', label:'Swiggy' },
     { key:'heebee', label:'In-Store' }
   ];
-  $('#dashPlatRatingLabel').textContent = 'Avg rating — ' + periodLabel + ' vs ' + prevLabel;
-  $('#dashPlatRating').innerHTML = plats.map(p => {
-    const curAvg  = _platAvg(cur,  p.key);
-    const prevAvg = _platAvg(prev, p.key);
-    const curStr  = curAvg  !== null ? curAvg.toFixed(2)  : '—';
-    const prevStr = prevAvg !== null ? prevAvg.toFixed(2) : '—';
-    let delta = '', deltaClass = 'flat';
-    if (curAvg !== null && prevAvg !== null) {
-      const diff = curAvg - prevAvg;
+  $('#platHealthGrid').innerHTML = platDefs.map(p => {
+    const cD = _platAvg(cur,  p.key);
+    const pD = _platAvg(prev, p.key);
+    const avgStr = cD ? cD.avg.toFixed(2) : '—';
+    const starsHtml = cD ? stars(Math.round(cD.avg)) : '<span style="color:var(--text3)">— no data</span>';
+    let badge = '', badgeCls = 'flat';
+    if (cD && pD) {
+      const diff = cD.avg - pD.avg;
       if (Math.abs(diff) >= 0.05) {
-        delta = (diff > 0 ? '▲ +' : '▼ ') + diff.toFixed(2) + ' vs ' + prevLabel;
-        deltaClass = diff > 0 ? 'up' : 'down';
-      } else {
-        delta = '— no change';
-      }
-    } else if (curAvg !== null && prevAvg === null) {
-      delta = '▲ new data';
-      deltaClass = 'up';
-    } else {
-      delta = '— no reviews';
-    }
-    const pct = curAvg !== null ? (curAvg / 5 * 100) : 0;
+        badge = (diff > 0 ? '▲ +' : '▼ ') + Math.abs(diff).toFixed(2) + ' vs ' + pvLabel;
+        badgeCls = diff > 0 ? 'up' : 'down';
+      } else { badge = '— same as ' + pvLabel; }
+    } else if (cD && !pD) { badge = '▲ first data'; badgeCls = 'up'; }
+    else { badge = '— no reviews'; }
+    const total = all.filter(r => r.platform === p.key).length;
     return `
-      <div class="bar-row" style="margin-bottom:13px;align-items:flex-start;grid-template-columns:90px 1fr 120px;">
-        <div class="bar-label" style="font-weight:400;color:var(--text);">${p.label}</div>
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <div class="bar-track"><div class="bar-fill ${p.key}" style="width:${pct}%"></div></div>
-          <div class="stat-delta ${deltaClass}" style="font-size:.5rem;">${delta}</div>
-        </div>
-        <div class="bar-val" style="font-size:1rem;font-family:'Nunito Sans',sans-serif;font-weight:200;text-align:right;">
-          ${curStr}<span style="font-size:.6rem;color:var(--text3);margin-left:4px;">/ 5</span>
-        </div>
+      <div class="plat-card ${p.key}">
+        <div class="plat-name">${p.label}</div>
+        <div class="plat-avg">${avgStr}</div>
+        <div class="plat-stars-row">${starsHtml}</div>
+        <div class="plat-count">${total.toLocaleString()} total</div>
+        <div class="plat-delta-badge ${badgeCls}">${badge}</div>
       </div>`;
   }).join('');
 
-  // ② Reviews received ──────────────────────────────
-  const d1 = _delta(cur.length, prev.length);
-  $('#stTotal').textContent      = cur.length.toLocaleString();
-  $('#stTotalSub').textContent   = periodLabel;
-  $('#stTotalDelta').textContent = d1.text;
-  $('#stTotalDelta').className   = 'stat-delta ' + d1.cls;
+  // ② KPI tiles ────────────────────────────────────────
+  // Reviews received
+  const d1 = _deltaLabel(cur.length, prev.length);
+  $('#stTotal').textContent     = cur.length.toLocaleString();
+  $('#stTotalDelta').textContent = d1.text + ' vs ' + pvLabel;
+  $('#stTotalDelta').className   = 'kpi-delta ' + d1.cls;
 
-  // ② Response rate (% replied in current period) ────
-  const curReplied = cur.filter(r => r.status === 'replied').length;
+  // Response rate
+  const curReplied  = cur.filter(r => r.status === 'replied').length;
   const prevReplied = prev.filter(r => r.status === 'replied').length;
   const curRate  = cur.length  ? Math.round(curReplied  / cur.length  * 100) : 0;
   const prevRate = prev.length ? Math.round(prevReplied / prev.length * 100) : 0;
-  const d2 = _delta(curRate, prevRate);
+  const d2 = _deltaLabel(curRate, prevRate);
   $('#stRespRate').textContent      = curRate + '%';
-  $('#stRespRateSub').textContent   = curReplied + ' of ' + cur.length + ' replied';
-  $('#stRespRateDelta').textContent = d2.text;
-  $('#stRespRateDelta').className   = 'stat-delta ' + d2.cls;
+  $('#stRespRateDelta').textContent = curReplied + ' of ' + cur.length + ' · ' + d2.text;
+  $('#stRespRateDelta').className   = 'kpi-delta ' + d2.cls;
 
-  // ② Unread now (current state, no comparison) ──────
-  const unread = allReviews.filter(r => !r.read).length;
+  // Low star alerts (1-2★)
+  const curLow  = cur.filter(r  => Number(r.rating) <= 2).length;
+  const prevLow = prev.filter(r => Number(r.rating) <= 2).length;
+  const d3 = _deltaLabel(curLow, prevLow, false); // lower is better
+  $('#stLowStar').textContent      = curLow.toLocaleString();
+  $('#stLowStarDelta').textContent = d3.text + ' vs ' + pvLabel;
+  $('#stLowStarDelta').className   = 'kpi-delta ' + d3.cls;
+
+  // Unread (current state)
+  const unread = all.filter(r => !r.read).length;
   $('#stUnread').textContent    = unread.toLocaleString();
-  $('#stUnreadSub').textContent = unread === 0 ? 'All caught up ✓' : 'Needs attention';
-  $('#stUnreadSub').className   = 'stat-sub ' + (unread === 0 ? 'up' : 'down');
+  $('#stUnreadSub').textContent = unread === 0 ? 'All clear ✓' : 'Needs attention';
 
-  // ④ Activity chart ─────────────────────────────────
+  // ③ Stacked activity chart ───────────────────────────
   const day = 86400000;
   let buckets = [];
   if (state.dashPeriod === 'week') {
@@ -2046,7 +2166,10 @@ function renderDashboardPanel() {
       const d = new Date(curEnd - i * day);
       const s = new Date(d); s.setHours(0,0,0,0);
       const e = new Date(d); e.setHours(23,59,59,999);
-      buckets.push({ label: d.toLocaleDateString('en-US',{weekday:'short'}), count: _filterByRange(allReviews,+s,+e).length });
+      const slice = _filterByRange(all, +s, +e);
+      const pc = {};
+      ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
+      buckets.push({ label: d.toLocaleDateString('en-US',{weekday:'short'}), total: slice.length, pc });
     }
     $('#dashActivityLabel').textContent = 'Daily activity — this week';
   } else if (state.dashPeriod === 'month') {
@@ -2055,85 +2178,187 @@ function renderDashboardPanel() {
     for (let d = 1; d <= days; d++) {
       const s = new Date(now2.getFullYear(), now2.getMonth(), d, 0,0,0,0);
       const e = new Date(now2.getFullYear(), now2.getMonth(), d, 23,59,59,999);
-      buckets.push({ label: String(d), count: _filterByRange(allReviews,+s,+e).length });
+      const slice = _filterByRange(all, +s, +e);
+      const pc = {};
+      ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
+      buckets.push({ label: String(d), total: slice.length, pc });
     }
-    $('#dashActivityLabel').textContent = 'Daily activity — ' + new Date().toLocaleDateString('en-US',{month:'long'});
+    $('#dashActivityLabel').textContent = 'Daily activity — ' + new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
   } else {
     const now2 = new Date();
     for (let m = 0; m <= now2.getMonth(); m++) {
       const s = new Date(now2.getFullYear(), m, 1);
       const e = new Date(now2.getFullYear(), m+1, 0, 23,59,59,999);
-      buckets.push({ label: s.toLocaleDateString('en-US',{month:'short'}), count: _filterByRange(allReviews,+s,+e).length });
+      const slice = _filterByRange(all, +s, +e);
+      const pc = {};
+      ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
+      buckets.push({ label: s.toLocaleDateString('en-US',{month:'short'}), total: slice.length, pc });
     }
     $('#dashActivityLabel').textContent = 'Monthly activity — ' + new Date().getFullYear();
   }
-  const maxA = Math.max(1, ...buckets.map(b => b.count));
+  const maxA = Math.max(1, ...buckets.map(b => b.total));
   $('#dashActivity').innerHTML = buckets.map(b => `
     <div class="bar-row">
       <div class="bar-label">${b.label}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxA*100)}%"></div></div>
-      <div class="bar-val">${b.count}</div>
+      ${_stackedBar(b.pc, maxA)}
+      <div class="bar-val">${b.total || ''}</div>
     </div>`).join('');
+
+  // ④ Insight tiles ────────────────────────────────────
+  const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dowCounts = [0,0,0,0,0,0,0];
+  all.forEach(r => { const t = _reviewTimestamp(r); if (t) dowCounts[new Date(t).getDay()]++; });
+  const bestDowIdx = dowCounts.indexOf(Math.max(...dowCounts));
+
+  const branchCounts = { b1:0, b2:0, b3:0 };
+  all.forEach(r => { if (branchCounts[r.branch] !== undefined) branchCounts[r.branch]++; });
+  const bestBranchKey = Object.keys(branchCounts).reduce((a,b) => branchCounts[a]>branchCounts[b]?a:b,'b1');
+
+  const totalReplied = all.filter(r => r.status === 'replied').length;
+  const overallRate  = all.length ? Math.round(totalReplied / all.length * 100) : 0;
+
+  const lowRated = all.filter(r => Number(r.rating) <= 2);
+  const unrepLow = lowRated.filter(r => r.status !== 'replied').length;
+
+  $('#dashInsights').innerHTML = `
+    <div class="insight-tile">
+      <div class="insight-label">Busiest day</div>
+      <div class="insight-value">${dow[bestDowIdx]}</div>
+      <div class="insight-sub">${dowCounts[bestDowIdx]} reviews avg</div>
+    </div>
+    <div class="insight-tile">
+      <div class="insight-label">Top branch</div>
+      <div class="insight-value">${branchName(bestBranchKey)}</div>
+      <div class="insight-sub">${branchCounts[bestBranchKey].toLocaleString()} reviews</div>
+    </div>
+    <div class="insight-tile">
+      <div class="insight-label">Overall reply rate</div>
+      <div class="insight-value">${overallRate}%</div>
+      <div class="insight-sub">${totalReplied} of ${all.length} replied</div>
+    </div>
+    <div class="insight-tile">
+      <div class="insight-label">Unreplied low ★</div>
+      <div class="insight-value" style="color:${unrepLow>0?'var(--danger)':'var(--success)'}">${unrepLow}</div>
+      <div class="insight-sub">${unrepLow===0?'All handled ✓':'Need urgent reply'}</div>
+    </div>`;
 }
 
 // ═══════════════════════════════════════════════════════
 // ANALYTICS PANEL
 // ═══════════════════════════════════════════════════════
+function _barHtml(label, count, max, colorClass, colorStyle) {
+  const w = (count / Math.max(1, max) * 100).toFixed(1);
+  const fill = colorStyle
+    ? `style="width:${w}%;${colorStyle}"`
+    : `class="bar-fill ${colorClass||''}" style="width:${w}%"`;
+  return `
+    <div class="bar-row">
+      <div class="bar-label">${esc(label)}</div>
+      <div class="bar-track"><div class="bar-fill" ${fill}></div></div>
+      <div class="bar-val">${count}</div>
+    </div>`;
+}
+
 function renderAnalyticsPanel() {
-  const reviews = state.reviews || [];
-  const total = reviews.length || 1;
+  const R = state.reviews || [];
 
-  // By platform
+  // 1. Volume by platform ──────────────────────────────
   const plats = ['google','zomato','swiggy','heebee'];
-  const platCounts = plats.map(p => ({ key: p, label: platName(p), count: reviews.filter(r => r.platform === p).length }));
-  const maxP = Math.max(1, ...platCounts.map(x => x.count));
-  $('#chartByPlatform').innerHTML = platCounts.map(x => `
-    <div class="bar-row">
-      <div class="bar-label">${esc(x.label)}</div>
-      <div class="bar-track"><div class="bar-fill ${x.key}" style="width:${(x.count/maxP*100)}%"></div></div>
-      <div class="bar-val">${x.count}</div>
-    </div>`).join('');
+  const pCounts = plats.map(p => ({ p, n: R.filter(r => r.platform===p).length }));
+  const maxP = Math.max(1, ...pCounts.map(x => x.n));
+  $('#chartByPlatform').innerHTML = pCounts.map(x =>
+    _barHtml(platName(x.p), x.n, maxP, x.p, '')).join('');
 
-  // By branch
+  // 2. Avg ★ by branch ─────────────────────────────────
   const branches = ['b1','b2','b3'];
-  const brCounts = branches.map(b => ({ key: b, label: branchName(b), count: reviews.filter(r => r.branch === b).length }));
-  const maxB = Math.max(1, ...brCounts.map(x => x.count));
-  $('#chartByBranch').innerHTML = brCounts.map(x => `
+  const brAvgs = branches.map(b => {
+    const rv = R.filter(r => r.branch===b && Number(r.rating)>0);
+    const avg = rv.length ? rv.reduce((s,r) => s+Number(r.rating),0)/rv.length : 0;
+    return { b, avg, count: R.filter(r=>r.branch===b).length };
+  });
+  const maxBA = 5;
+  $('#chartByBranchRating').innerHTML = brAvgs.map(x => `
     <div class="bar-row">
-      <div class="bar-label">${esc(x.label)}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxB*100)}%"></div></div>
-      <div class="bar-val">${x.count}</div>
+      <div class="bar-label">${esc(branchName(x.b))}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(x.avg/maxBA*100).toFixed(1)}%;background:linear-gradient(90deg,var(--gold),var(--gold2))"></div>
+      </div>
+      <div class="bar-val">${x.avg ? x.avg.toFixed(2)+'★' : '—'}</div>
     </div>`).join('');
 
-  // Rating distribution (1–5)
-  const dist = [5,4,3,2,1].map(n => ({ n, count: reviews.filter(r => Math.round(Number(r.rating)) === n).length }));
-  const maxR = Math.max(1, ...dist.map(x => x.count));
+  // 3. Volume by branch ────────────────────────────────
+  const brCounts = branches.map(b => ({ b, n: R.filter(r=>r.branch===b).length }));
+  const maxBr = Math.max(1,...brCounts.map(x=>x.n));
+  $('#chartByBranch').innerHTML = brCounts.map(x =>
+    _barHtml(branchName(x.b), x.n, maxBr, '', '')).join('');
+
+  // 4. Rating distribution 5→1 ─────────────────────────
+  const dist = [5,4,3,2,1].map(n => ({ n, count: R.filter(r=>Math.round(Number(r.rating))===n).length }));
+  const maxR = Math.max(1,...dist.map(x=>x.count));
   $('#chartByRating').innerHTML = dist.map(x => `
     <div class="dist-row">
       <div><span class="star">★</span>${x.n}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxR*100)}%;background:${
-        x.n >= 4 ? 'linear-gradient(90deg,#2e7d32,#51cf66)' :
-        x.n === 3 ? 'linear-gradient(90deg,#d97706,#fbbf24)' :
-                    'linear-gradient(90deg,#c62828,#ff6b6b)'
-      }"></div></div>
-      <div class="bar-val">${x.count}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxR*100).toFixed(1)}%;background:${
+        x.n>=4?'linear-gradient(90deg,#2e7d32,#51cf66)':
+        x.n===3?'linear-gradient(90deg,#d97706,#fbbf24)':
+                'linear-gradient(90deg,#c62828,#ff6b6b)'}"></div></div>
+      <div class="bar-val">${x.count} <span style="color:var(--text3);font-size:.5rem;">(${R.length?Math.round(x.count/R.length*100):0}%)</span></div>
     </div>`).join('');
 
-  // Reply status
-  const replied   = reviews.filter(r => r.status === 'replied').length;
-  const pending   = reviews.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status).length;
-  const escalated = reviews.filter(r => r.status === 'escalated').length;
-  const stats = [
-    { label: 'Replied',   count: replied,   color: 'linear-gradient(90deg,#2e7d32,#51cf66)' },
-    { label: 'Pending',   count: pending,   color: 'linear-gradient(90deg,#d97706,#fbbf24)' },
-    { label: 'Escalated', count: escalated, color: 'linear-gradient(90deg,#c62828,#ff6b6b)' }
+  // 5. Reply status ────────────────────────────────────
+  const replied   = R.filter(r=>r.status==='replied').length;
+  const pending   = R.filter(r=>r.status==='pending'||r.status==='unread'||!r.status).length;
+  const escalated = R.filter(r=>r.status==='escalated').length;
+  const statuses  = [
+    { l:'Replied',   n:replied,   col:'linear-gradient(90deg,#2e7d32,#51cf66)' },
+    { l:'Pending',   n:pending,   col:'linear-gradient(90deg,#d97706,#fbbf24)' },
+    { l:'Escalated', n:escalated, col:'linear-gradient(90deg,#c62828,#ff6b6b)' }
   ];
-  const maxS = Math.max(1, ...stats.map(x => x.count));
-  $('#chartByStatus').innerHTML = stats.map(x => `
+  const maxS = Math.max(1,...statuses.map(x=>x.n));
+  $('#chartByStatus').innerHTML = statuses.map(x => `
     <div class="bar-row">
-      <div class="bar-label">${x.label}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxS*100)}%;background:${x.color}"></div></div>
-      <div class="bar-val">${x.count}</div>
+      <div class="bar-label">${x.l}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(x.n/maxS*100).toFixed(1)}%;background:${x.col}"></div></div>
+      <div class="bar-val">${x.n}</div>
+    </div>`).join('');
+
+  // 6. Response rate by platform ───────────────────────
+  const respByPlat = plats.map(p => {
+    const pr = R.filter(r=>r.platform===p);
+    const rep = pr.filter(r=>r.status==='replied').length;
+    const rate = pr.length ? Math.round(rep/pr.length*100) : 0;
+    return { p, rate, rep, total: pr.length };
+  });
+  const maxRP = 100;
+  $('#chartRespByPlat').innerHTML = respByPlat.map(x => `
+    <div class="bar-row">
+      <div class="bar-label">${platName(x.p)}</div>
+      <div class="bar-track"><div class="bar-fill ${x.p}" style="width:${x.rate}%"></div></div>
+      <div class="bar-val">${x.rate}%</div>
+    </div>`).join('');
+
+  // 7. Reviews by day of week ──────────────────────────
+  const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dowCounts = [0,0,0,0,0,0,0];
+  R.forEach(r => { const t=_reviewTimestamp(r); if(t) dowCounts[new Date(t).getDay()]++; });
+  const maxDow = Math.max(1,...dowCounts);
+  $('#chartByDow').innerHTML = dowLabels.map((l,i) => `
+    <div class="bar-row">
+      <div class="bar-label">${l}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(dowCounts[i]/maxDow*100).toFixed(1)}%"></div></div>
+      <div class="bar-val">${dowCounts[i]}</div>
+    </div>`).join('');
+
+  // 8. Low ★ (1–2) by platform ─────────────────────────
+  const lowByPlat = plats.map(p => ({
+    p, n: R.filter(r=>r.platform===p && Number(r.rating)<=2).length
+  }));
+  const maxL = Math.max(1,...lowByPlat.map(x=>x.n));
+  $('#chartLowByPlat').innerHTML = lowByPlat.map(x => `
+    <div class="bar-row">
+      <div class="bar-label">${platName(x.p)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(x.n/maxL*100).toFixed(1)}%;background:linear-gradient(90deg,#c62828,#ff6b6b)"></div></div>
+      <div class="bar-val">${x.n}</div>
     </div>`).join('');
 }
 
