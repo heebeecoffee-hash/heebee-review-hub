@@ -1,0 +1,23 @@
+{
+  "name": "Heebee Review Hub",
+  "short_name": "Reviews",
+  "description": "Customer review intelligence for Heebee Coffee — Google, Zomato, Swiggy, in-store feedback in one place.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f5f7",
+  "theme_color": "#1d1d1f",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Unread Reviews",  "short_name": "Unread",  "url": "./index.html#unread" },
+    { "name": "Low Ratings",     "short_name": "1-2 Stars", "url": "./index.html#low" },
+    { "name": "Pending Reply",   "short_name": "Pending",  "url": "./index.html#pending" }
+  ]
+}
