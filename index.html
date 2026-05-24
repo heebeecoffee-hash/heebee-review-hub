@@ -557,6 +557,18 @@ body.signed-in .bottom-nav { display:flex; }
   .app { padding-bottom:40px; }
 }
 
+/* Fix panel exit — must stay block during animation then disappear */
+.panel { display:none; }
+.panel.active { display:block; animation:panelReveal .45s cubic-bezier(.4,0,.2,1) forwards; }
+.panel.exit   { display:block; animation:panelExit .25s cubic-bezier(.4,0,.2,1) forwards; pointer-events:none; }
+
+/* Sticky reviews header — locks in place, only cards scroll */
+.reviews-sticky {
+  position:sticky; top:0; z-index:50;
+  background:var(--bg); padding-bottom:8px;
+  transition:background .55s cubic-bezier(.4,0,.2,1);
+}
+
 /* Section header inside a panel */
 .panel-head {
   display:flex; align-items:center; justify-content:space-between;
@@ -804,45 +816,50 @@ body.signed-in .bottom-nav { display:flex; }
 
         <!-- ◉ REVIEWS ───────────────────────────── -->
         <section class="panel" id="panelReviews">
-          <div class="panel-head">
-            <div>
-              <div class="panel-sub">Inbox</div>
-              <div class="panel-title">Reviews</div>
+
+          <!-- Everything above the list sticks to the top -->
+          <div class="reviews-sticky">
+            <div class="panel-head">
+              <div>
+                <div class="panel-sub">Inbox</div>
+                <div class="panel-title">Reviews</div>
+              </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+              <button class="tab active" data-tab="all">All</button>
+              <button class="tab" data-tab="unread">Unread</button>
+              <button class="tab" data-tab="low">Low ★</button>
+              <button class="tab" data-tab="pending">Pending</button>
+            </div>
+
+            <!-- Filter chips: platform + branch -->
+            <div class="glass" style="padding:6px 4px; margin-bottom:12px;">
+              <div class="filterbar" id="platformChips">
+                <div class="chip on" data-pf="all">All Platforms</div>
+                <div class="chip" data-pf="google">Google</div>
+                <div class="chip" data-pf="zomato">Zomato</div>
+                <div class="chip" data-pf="swiggy">Swiggy</div>
+                <div class="chip" data-pf="heebee">In-Store</div>
+              </div>
+              <div class="filterbar" id="branchChips">
+                <div class="chip on" data-br="all">All Branches</div>
+                <div class="chip" data-br="b1">Sarabha Nagar</div>
+                <div class="chip" data-br="b2">Ghumar Mandi</div>
+                <div class="chip" data-br="b3">Model Town</div>
+              </div>
+            </div>
+
+            <!-- Search -->
+            <div class="search-wrap">
+              <span class="search-icon">⌕</span>
+              <input class="search-input" id="searchInput" type="search" placeholder="Search reviews, names, keywords…">
             </div>
           </div>
+          <!-- end .reviews-sticky -->
 
-          <!-- Tabs -->
-          <div class="tabs">
-            <button class="tab active" data-tab="all">All</button>
-            <button class="tab" data-tab="unread">Unread</button>
-            <button class="tab" data-tab="low">Low ★</button>
-            <button class="tab" data-tab="pending">Pending</button>
-          </div>
-
-          <!-- Filter chips: platform + branch -->
-          <div class="glass" style="padding:6px 4px; margin-bottom:12px;">
-            <div class="filterbar" id="platformChips">
-              <div class="chip on" data-pf="all">All Platforms</div>
-              <div class="chip" data-pf="google">Google</div>
-              <div class="chip" data-pf="zomato">Zomato</div>
-              <div class="chip" data-pf="swiggy">Swiggy</div>
-              <div class="chip" data-pf="heebee">In-Store</div>
-            </div>
-            <div class="filterbar" id="branchChips">
-              <div class="chip on" data-br="all">All Branches</div>
-              <div class="chip" data-br="b1">Sarabha Nagar</div>
-              <div class="chip" data-br="b2">Ghumar Mandi</div>
-              <div class="chip" data-br="b3">Model Town</div>
-            </div>
-          </div>
-
-          <!-- Search -->
-          <div class="search-wrap">
-            <span class="search-icon">⌕</span>
-            <input class="search-input" id="searchInput" type="search" placeholder="Search reviews, names, keywords…">
-          </div>
-
-          <!-- Reviews list -->
+          <!-- Only this scrolls -->
           <div id="reviewsList"></div>
           <button class="load-more" id="loadMoreBtn" style="display:none;">Load more</button>
         </section>
@@ -1832,8 +1849,12 @@ function switchPanel(name) {
   if (current) {
     current.classList.remove('active');
     current.classList.add('exit');
-    setTimeout(() => current.classList.remove('exit'), 260);
+    setTimeout(() => {
+      current.classList.remove('exit');
+      current.style.display = '';   // reset any inline style
+    }, 260);
   }
+  next.style.display = '';          // clear any leftover inline display
   next.classList.add('active');
   state.panel = name;
   // Update nav-item highlight in BOTH sidebar + bottom nav
