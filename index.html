@@ -485,7 +485,10 @@ body.dark .user-avatar { color:#0a0a0f; }
 .bio-prompt {
   margin:0 0 10px;
   padding:12px 14px; border-radius:14px;
-  background:var(--surface2); border:1px solid var(--border);
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:var(--shadow);
   display:none; flex-direction:column; gap:8px;
 }
 .bio-prompt.show { display:flex; animation:panelReveal .4s ease; }
@@ -581,9 +584,9 @@ body.signed-in .bottom-nav { display:flex; }
   transition:border-color .4s ease;
 }
 body.light .reviews-sticky,
-body.light .dash-sticky { background:rgba(245,245,247,.92); }
+body.light .dash-sticky { background:rgba(245,245,247,.72); }
 body.dark  .reviews-sticky,
-body.dark  .dash-sticky  { background:rgba(10,10,15,.92); }
+body.dark  .dash-sticky  { background:rgba(10,10,15,.72); }
 
 /* Section header inside a panel */
 .panel-head {
