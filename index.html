@@ -483,12 +483,16 @@ body.dark .user-avatar { color:#0a0a0f; }
 
 /* BIO PROMPT for setting up biometric after login */
 .bio-prompt {
-  margin:12px 0 4px;
-  padding:14px 16px; border-radius:14px;
+  margin:0 0 10px;
+  padding:12px 16px; border-radius:14px;
   background:var(--surface2); border:1px solid var(--border);
   display:none; align-items:center; gap:12px;
 }
 .bio-prompt.show { display:flex; animation:panelReveal .4s ease; }
+/* On desktop, tuck it into the sidebar so it doesn't push the shell */
+@media (min-width:900px) {
+  .bio-prompt { margin:8px 0 0; font-size:.8rem; }
+}
 .bio-prompt-text { flex:1; font-size:.75rem; color:var(--text2); line-height:1.4; }
 .bio-prompt-text strong { color:var(--text); font-weight:400; }
 
@@ -562,12 +566,18 @@ body.signed-in .bottom-nav { display:flex; }
 .panel.active { display:block; animation:panelReveal .45s cubic-bezier(.4,0,.2,1) forwards; }
 .panel.exit   { display:block; animation:panelExit .25s cubic-bezier(.4,0,.2,1) forwards; pointer-events:none; }
 
-/* Sticky reviews header — locks in place, only cards scroll */
+/* Sticky reviews header — frosted glass, locks below the sidebar's sticky offset */
 .reviews-sticky {
   position:sticky; top:0; z-index:50;
-  background:var(--bg); padding-bottom:8px;
-  transition:background .55s cubic-bezier(.4,0,.2,1);
+  backdrop-filter:saturate(180%) blur(24px);
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  border-bottom:1px solid var(--border2);
+  padding-bottom:10px;
+  margin:0 -2px; padding-left:2px; padding-right:2px;
+  transition:border-color .4s ease;
 }
+body.light .reviews-sticky { background:rgba(245,245,247,.92); }
+body.dark  .reviews-sticky { background:rgba(10,10,15,.92); }
 
 /* Section header inside a panel */
 .panel-head {
@@ -728,15 +738,6 @@ body.signed-in .bottom-nav { display:flex; }
       <button class="icon-btn" id="logoutBtn" title="Sign out">⏻</button>
     </div>
 
-    <div class="bio-prompt" id="bioPrompt">
-      <div class="bio-prompt-text">
-        <strong>Faster sign-in next time?</strong><br>
-        Enable Face ID / fingerprint on this device.
-      </div>
-      <button class="install-cta" id="bioEnableBtn">Enable</button>
-      <button class="install-dismiss" id="bioDismissBtn">×</button>
-    </div>
-
     <div class="app-shell">
 
       <!-- ── DESKTOP SIDEBAR ──────────────────────── -->
@@ -746,6 +747,13 @@ body.signed-in .bottom-nav { display:flex; }
         <button class="nav-item"        data-panel="analytics"><span class="nav-ico">▤</span><span>Analytics</span></button>
         <button class="nav-item"        data-panel="keywords" ><span class="nav-ico">⌗</span><span>Keywords</span></button>
         <button class="nav-item"        data-panel="templates"><span class="nav-ico">✎</span><span>Templates</span></button>
+        <div class="bio-prompt" id="bioPrompt">
+          <div class="bio-prompt-text" style="font-size:.72rem;">
+            <strong>Faster sign-in?</strong><br>Enable Face ID on this device.
+          </div>
+          <button class="install-cta" id="bioEnableBtn" style="font-size:.5rem;padding:6px 10px;">Enable</button>
+          <button class="install-dismiss" id="bioDismissBtn">×</button>
+        </div>
       </nav>
 
       <!-- ── MAIN PANELS ─────────────────────────── -->
