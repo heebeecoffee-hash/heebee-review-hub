@@ -365,6 +365,8 @@ body.dark .user-avatar { color:#0a0a0f; }
 .qbtn:hover { border-color:var(--text2); }
 .qbtn:active { transform:scale(.93); }
 .qbtn.active { background:var(--btn-bg); color:var(--btn-fg); border-color:var(--btn-bg); }
+.qbtn-wa { border-color:rgba(37,211,102,0.4); color:#25d366; }
+.qbtn-wa:hover { background:rgba(37,211,102,0.08); border-color:#25d366; }
 
 /* SKELETON */
 .skel-card { padding:16px; margin-bottom:10px; }
@@ -1163,6 +1165,7 @@ function reviewCardHtml(r) {
         <div class="r-quick">
           <button class="qbtn" data-act="read"  data-id="${esc(r.id)}">${r.read ? '✓ Read' : 'Mark read'}</button>
           <button class="qbtn" data-act="reply" data-id="${esc(r.id)}">Reply</button>
+          ${r.platform === 'heebee' && r.phone ? `<button class="qbtn qbtn-wa" data-act="whatsapp" data-id="${esc(r.id)}">💬 WhatsApp</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -1175,8 +1178,9 @@ $('#reviewsList').addEventListener('click', e => {
     e.stopPropagation();
     const id  = btn.dataset.id;
     const act = btn.dataset.act;
-    if (act === 'read')  return toggleRead(id, btn);
-    if (act === 'reply') return openReply(id);
+    if (act === 'read')      return toggleRead(id, btn);
+    if (act === 'reply')     return openReply(id);
+    if (act === 'whatsapp')  return openWhatsApp(id);
     return;
   }
   const card = e.target.closest('.review');
@@ -1363,6 +1367,33 @@ window.useTemplate = function(tplId) {
   const t = state.templates.find(x => String(x.id) === String(tplId));
   if (t) $('#replyArea').value = t.text;
 };
+
+function openWhatsApp(id) {
+  const r = state.reviews.find(x => String(x.id) === String(id));
+  if (!r || !r.phone) return;
+
+  // Format phone — strip non-digits, add India code if needed
+  let phone = String(r.phone).replace(/\D/g, '');
+  if (phone.startsWith('0'))  phone = '91' + phone.slice(1);
+  if (phone.length === 10)    phone = '91' + phone;
+
+  // Pre-filled message based on rating
+  const name    = r.reviewer && r.reviewer !== 'Anonymous' ? r.reviewer.split(' ')[0] : 'there';
+  const rating  = Number(r.rating);
+  let msg;
+  if (rating >= 5) {
+    msg = `Hi ${name}! 🌟 Thank you so much for the wonderful review! It truly means a lot to the entire Heebee team. We look forward to seeing you again soon! ☕`;
+  } else if (rating === 4) {
+    msg = `Hi ${name}! 😊 Thank you for visiting Heebee Coffee and sharing your feedback. We're glad you had a good experience and hope to make it even better next time! ☕`;
+  } else if (rating === 3) {
+    msg = `Hi ${name}, thank you for visiting Heebee Coffee! We'd love to hear more about how we can make your next experience even better. Your feedback means a lot to us. ☕`;
+  } else {
+    msg = `Hi ${name}, we're truly sorry about your experience at Heebee Coffee. This is not the standard we hold ourselves to. We'd love to make it right — could we connect briefly? ☕`;
+  }
+
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+}
 
 async function postReply(id, isGoogle) {
   const text = $('#replyArea').value.trim();
