@@ -509,6 +509,134 @@ body.dark .user-avatar { color:#0a0a0f; }
 }
 .load-more:hover { border-color:var(--gold); color:var(--gold); }
 
+/* ═══════════════════════════════════════════════════════
+   APP SHELL — sidebar (desktop) + bottom nav (mobile)
+═══════════════════════════════════════════════════════ */
+.app-shell { display:block; }
+.side-nav { display:none; }
+.bottom-nav {
+  position:fixed; left:0; right:0; bottom:0; z-index:120;
+  display:none; justify-content:space-around; align-items:center;
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  background:var(--surface); backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-top:1px solid var(--border);
+  transition:background .5s ease, border-color .5s ease;
+}
+body.signed-in .bottom-nav { display:flex; }
+.nav-item {
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:8px 4px; background:transparent; border:none; cursor:pointer;
+  font-family:'Space Mono',monospace; font-size:.46rem; letter-spacing:1.5px;
+  text-transform:uppercase; color:var(--text3);
+  transition:color .25s ease, transform .15s ease;
+}
+.nav-item .nav-ico { font-size:1.1rem; line-height:1; }
+.nav-item.active { color:var(--gold); }
+.nav-item:active { transform:scale(.94); }
+
+@media (min-width:900px) {
+  .app { max-width:1180px; padding:0 24px 40px; }
+  .app-shell {
+    display:grid; grid-template-columns:220px 1fr;
+    gap:24px; align-items:start;
+  }
+  .side-nav {
+    display:flex; flex-direction:column; gap:4px;
+    padding:14px 10px; position:sticky; top:18px;
+  }
+  .side-nav .nav-item {
+    flex-direction:row; justify-content:flex-start; gap:12px;
+    padding:11px 14px; border-radius:12px; font-size:.62rem; letter-spacing:2px;
+    transition:background .25s, color .25s;
+  }
+  .side-nav .nav-item .nav-ico { font-size:1rem; }
+  .side-nav .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .side-nav .nav-item.active { background:var(--btn-bg); color:var(--btn-fg); }
+  body.signed-in .bottom-nav { display:none; }
+  .app { padding-bottom:40px; }
+}
+
+/* Section header inside a panel */
+.panel-head {
+  display:flex; align-items:center; justify-content:space-between;
+  margin:4px 4px 14px;
+}
+.panel-title {
+  font-family:'Nunito Sans',sans-serif; font-weight:200;
+  font-size:1.3rem; letter-spacing:2px; color:var(--text);
+}
+.panel-sub {
+  font-family:'Space Mono',monospace; font-size:.5rem; letter-spacing:2.5px;
+  text-transform:uppercase; color:var(--text3);
+}
+
+/* DASHBOARD stat cards */
+.stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:18px; }
+@media (min-width:600px) { .stat-grid { grid-template-columns:repeat(4,1fr); } }
+.stat-card { padding:16px 14px; border-radius:18px; }
+.stat-label { font-family:'Space Mono',monospace; font-size:.5rem; letter-spacing:2.5px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:8px; }
+.stat-value { font-family:'Nunito Sans',sans-serif; font-weight:200;
+  font-size:1.8rem; line-height:1; color:var(--text); }
+.stat-sub { font-family:'Space Mono',monospace; font-size:.5rem; letter-spacing:1.5px;
+  color:var(--text3); margin-top:6px; }
+.stat-sub.up   { color:var(--success); }
+.stat-sub.down { color:var(--danger); }
+
+/* CHART (CSS bars) */
+.chart-card { padding:18px 16px; margin-bottom:14px; }
+.chart-title { font-family:'Space Mono',monospace; font-size:.55rem; letter-spacing:2.5px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:14px; }
+.bar-row { display:grid; grid-template-columns:90px 1fr 48px; gap:10px;
+  align-items:center; margin-bottom:9px; }
+.bar-label { font-size:.72rem; color:var(--text2); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.bar-track { height:8px; background:var(--surface2); border-radius:6px; overflow:hidden;
+  border:1px solid var(--border2); }
+.bar-fill { height:100%; border-radius:6px;
+  background:linear-gradient(90deg,var(--gold),var(--gold2));
+  transition:width .7s cubic-bezier(.4,0,.2,1); }
+.bar-fill.google { background:linear-gradient(90deg,#4285F4,#6FA3FF); }
+.bar-fill.zomato { background:linear-gradient(90deg,#E23744,#FF6B7A); }
+.bar-fill.swiggy { background:linear-gradient(90deg,#FC8019,#FFA055); }
+.bar-fill.heebee { background:linear-gradient(90deg,#8B5E3C,#C99A6D); }
+.bar-val { font-family:'Space Mono',monospace; font-size:.62rem; color:var(--text3);
+  text-align:right; }
+
+/* Rating distribution mini-bars */
+.dist-row { display:grid; grid-template-columns:30px 1fr 36px; gap:8px;
+  align-items:center; margin-bottom:7px; font-size:.72rem; color:var(--text2); }
+.dist-row .star { color:#f0c040; }
+
+/* KEYWORDS — tag cloud */
+.kw-cloud { display:flex; flex-wrap:wrap; gap:8px; padding:6px 2px; }
+.kw {
+  font-family:'Nunito Sans',sans-serif; font-weight:300;
+  padding:6px 12px; border-radius:60px;
+  background:var(--surface2); border:1px solid var(--border2); color:var(--text2);
+  cursor:pointer; transition:transform .15s, background .25s, color .25s, border-color .25s;
+}
+.kw:hover { background:var(--surface); color:var(--gold); border-color:var(--gold); transform:translateY(-1px); }
+.kw .kw-c { font-family:'Space Mono',monospace; font-size:.55rem; color:var(--text3);
+  margin-left:6px; letter-spacing:1px; }
+
+/* TEMPLATES list */
+.tpl-grid { display:grid; gap:10px; margin-bottom:14px; }
+.tpl-row { padding:14px 16px; border-radius:16px; position:relative; }
+.tpl-row .tpl-name { font-family:'Space Mono',monospace; font-size:.55rem;
+  letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:6px; }
+.tpl-row .tpl-text { font-size:.82rem; color:var(--text2); line-height:1.5;
+  font-weight:300; white-space:pre-wrap; word-break:break-word; }
+.tpl-actions { display:flex; gap:8px; margin-top:10px; }
+.tpl-actions .qbtn { padding:5px 12px; }
+.tpl-actions .qbtn.danger { color:var(--danger); border-color:rgba(198,40,40,.3); }
+
+/* Add bottom padding on mobile so bottom-nav doesn't cover content */
+@media (max-width:899px) {
+  .app { padding-bottom:88px; }
+}
+
 </style>
 </head>
 <body class="light">
@@ -588,50 +716,163 @@ body.dark .user-avatar { color:#0a0a0f; }
       <button class="install-dismiss" id="bioDismissBtn">×</button>
     </div>
 
-    <!-- Ratings Strip -->
-    <div class="rstrip" id="ratingsStrip">
-      <div class="rcard google"><div class="rlabel">Google</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
-      <div class="rcard zomato"><div class="rlabel">Zomato</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
-      <div class="rcard swiggy"><div class="rlabel">Swiggy</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
-      <div class="rcard heebee"><div class="rlabel">In-Store</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
+    <div class="app-shell">
+
+      <!-- ── DESKTOP SIDEBAR ──────────────────────── -->
+      <nav class="glass side-nav" id="sideNav">
+        <button class="nav-item active" data-panel="dashboard"><span class="nav-ico">◫</span><span>Dashboard</span></button>
+        <button class="nav-item"        data-panel="reviews"  ><span class="nav-ico">☰</span><span>Reviews</span></button>
+        <button class="nav-item"        data-panel="analytics"><span class="nav-ico">▤</span><span>Analytics</span></button>
+        <button class="nav-item"        data-panel="keywords" ><span class="nav-ico">⌗</span><span>Keywords</span></button>
+        <button class="nav-item"        data-panel="templates"><span class="nav-ico">✎</span><span>Templates</span></button>
+      </nav>
+
+      <!-- ── MAIN PANELS ─────────────────────────── -->
+      <main class="panel-host">
+
+        <!-- ◉ DASHBOARD ─────────────────────────── -->
+        <section class="panel active" id="panelDashboard">
+          <div class="panel-head">
+            <div>
+              <div class="panel-sub">Overview</div>
+              <div class="panel-title">Dashboard</div>
+            </div>
+          </div>
+
+          <!-- Ratings Strip (moved up — primary KPIs) -->
+          <div class="rstrip" id="ratingsStrip">
+            <div class="rcard google"><div class="rlabel">Google</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
+            <div class="rcard zomato"><div class="rlabel">Zomato</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
+            <div class="rcard swiggy"><div class="rlabel">Swiggy</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
+            <div class="rcard heebee"><div class="rlabel">In-Store</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
+          </div>
+
+          <div class="stat-grid" id="dashStats">
+            <div class="glass stat-card"><div class="stat-label">Total reviews</div><div class="stat-value" id="stTotal">—</div><div class="stat-sub" id="stTotalSub">&nbsp;</div></div>
+            <div class="glass stat-card"><div class="stat-label">Avg rating</div><div class="stat-value" id="stAvg">—</div><div class="stat-sub" id="stAvgSub">&nbsp;</div></div>
+            <div class="glass stat-card"><div class="stat-label">Unread</div><div class="stat-value" id="stUnread">—</div><div class="stat-sub" id="stUnreadSub">&nbsp;</div></div>
+            <div class="glass stat-card"><div class="stat-label">Pending reply</div><div class="stat-value" id="stPending">—</div><div class="stat-sub" id="stPendingSub">&nbsp;</div></div>
+          </div>
+
+          <div class="glass chart-card">
+            <div class="chart-title">This week's activity</div>
+            <div id="weekActivity"></div>
+          </div>
+        </section>
+
+        <!-- ◉ REVIEWS ───────────────────────────── -->
+        <section class="panel" id="panelReviews">
+          <div class="panel-head">
+            <div>
+              <div class="panel-sub">Inbox</div>
+              <div class="panel-title">Reviews</div>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="tabs">
+            <button class="tab active" data-tab="all">All</button>
+            <button class="tab" data-tab="unread">Unread</button>
+            <button class="tab" data-tab="low">Low ★</button>
+            <button class="tab" data-tab="pending">Pending</button>
+          </div>
+
+          <!-- Filter chips: platform + branch -->
+          <div class="glass" style="padding:6px 4px; margin-bottom:12px;">
+            <div class="filterbar" id="platformChips">
+              <div class="chip on" data-pf="all">All Platforms</div>
+              <div class="chip" data-pf="google">Google</div>
+              <div class="chip" data-pf="zomato">Zomato</div>
+              <div class="chip" data-pf="swiggy">Swiggy</div>
+              <div class="chip" data-pf="heebee">In-Store</div>
+            </div>
+            <div class="filterbar" id="branchChips">
+              <div class="chip on" data-br="all">All Branches</div>
+              <div class="chip" data-br="b1">Sarabha Nagar</div>
+              <div class="chip" data-br="b2">Ghumar Mandi</div>
+              <div class="chip" data-br="b3">Model Town</div>
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" id="searchInput" type="search" placeholder="Search reviews, names, keywords…">
+          </div>
+
+          <!-- Reviews list -->
+          <div id="reviewsList"></div>
+          <button class="load-more" id="loadMoreBtn" style="display:none;">Load more</button>
+        </section>
+
+        <!-- ◉ ANALYTICS ─────────────────────────── -->
+        <section class="panel" id="panelAnalytics">
+          <div class="panel-head">
+            <div>
+              <div class="panel-sub">Insights</div>
+              <div class="panel-title">Analytics</div>
+            </div>
+          </div>
+
+          <div class="glass chart-card">
+            <div class="chart-title">Reviews by platform</div>
+            <div id="chartByPlatform"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Reviews by branch</div>
+            <div id="chartByBranch"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Rating distribution</div>
+            <div id="chartByRating"></div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Reply status</div>
+            <div id="chartByStatus"></div>
+          </div>
+        </section>
+
+        <!-- ◉ KEYWORDS ──────────────────────────── -->
+        <section class="panel" id="panelKeywords">
+          <div class="panel-head">
+            <div>
+              <div class="panel-sub">Common terms</div>
+              <div class="panel-title">Keywords</div>
+            </div>
+            <div class="panel-sub" id="kwCount">—</div>
+          </div>
+          <div class="glass chart-card">
+            <div class="chart-title">Top mentions across all reviews</div>
+            <div class="kw-cloud" id="kwCloud"></div>
+          </div>
+        </section>
+
+        <!-- ◉ TEMPLATES ─────────────────────────── -->
+        <section class="panel" id="panelTemplates">
+          <div class="panel-head">
+            <div>
+              <div class="panel-sub">Quick replies</div>
+              <div class="panel-title">Templates</div>
+            </div>
+            <button class="qbtn active" id="tplAddBtn">+ Add</button>
+          </div>
+          <div class="tpl-grid" id="tplGrid"></div>
+        </section>
+
+      </main>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab active" data-tab="all">All</button>
-      <button class="tab" data-tab="unread">Unread</button>
-      <button class="tab" data-tab="low">Low ★</button>
-      <button class="tab" data-tab="pending">Pending</button>
-    </div>
-
-    <!-- Filter chips: platform + branch -->
-    <div class="glass" style="padding:6px 4px; margin-bottom:12px;">
-      <div class="filterbar" id="platformChips">
-        <div class="chip on" data-pf="all">All Platforms</div>
-        <div class="chip" data-pf="google">Google</div>
-        <div class="chip" data-pf="zomato">Zomato</div>
-        <div class="chip" data-pf="swiggy">Swiggy</div>
-        <div class="chip" data-pf="heebee">In-Store</div>
-      </div>
-      <div class="filterbar" id="branchChips">
-        <div class="chip on" data-br="all">All Branches</div>
-        <div class="chip" data-br="b1">Sarabha Nagar</div>
-        <div class="chip" data-br="b2">Ghumar Mandi</div>
-        <div class="chip" data-br="b3">Model Town</div>
-      </div>
-    </div>
-
-    <!-- Search -->
-    <div class="search-wrap">
-      <span class="search-icon">⌕</span>
-      <input class="search-input" id="searchInput" type="search" placeholder="Search reviews, names, keywords…">
-    </div>
-
-    <!-- Reviews list -->
-    <div id="reviewsList"></div>
-    <button class="load-more" id="loadMoreBtn" style="display:none;">Load more</button>
   </div>
 </div>
+
+<!-- ── MOBILE BOTTOM NAV ──────────────────────────── -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="nav-item active" data-panel="dashboard"><span class="nav-ico">◫</span><span>Home</span></button>
+  <button class="nav-item"        data-panel="reviews"  ><span class="nav-ico">☰</span><span>Reviews</span></button>
+  <button class="nav-item"        data-panel="analytics"><span class="nav-ico">▤</span><span>Stats</span></button>
+  <button class="nav-item"        data-panel="keywords" ><span class="nav-ico">⌗</span><span>Words</span></button>
+  <button class="nav-item"        data-panel="templates"><span class="nav-ico">✎</span><span>Reply</span></button>
+</nav>
 
 <!-- ── MODAL ───────────────────────────────────────── -->
 <div class="modal-back" id="modalBack">
@@ -802,6 +1043,7 @@ function logout(silent) {
   state.reviews = []; state.filtered = []; state.rendered = 0;
   $('#dashView').style.display = 'none';
   $('#loginView').style.display = 'block';
+  document.body.classList.remove('signed-in');
   $('#loginEmail').value = '';
   $('#loginPin').value = '';
   if (!silent) toast('Signed out', 'ok');
@@ -869,6 +1111,7 @@ function enterApp() {
   $('#userRole').textContent = (u.role || 'Staff') + (u.branch ? ' · ' + branchName(u.branch) : '');
   $('#loginView').style.display = 'none';
   $('#dashView').style.display = 'block';
+  document.body.classList.add('signed-in');
   $('#loginBtn').disabled = false;
   // Show bio enrollment prompt if not yet set up on this device
   if (!localStorage.getItem(BIO_KEY) && bioSupported()) {
@@ -1526,6 +1769,307 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+// ═══════════════════════════════════════════════════════
+// PANEL SWITCHING (sidebar + bottom nav)
+// ═══════════════════════════════════════════════════════
+state.panel = 'dashboard';
+const PANEL_RENDERERS = {
+  dashboard: renderDashboardPanel,
+  reviews:   () => {},                 // already live-rendered
+  analytics: renderAnalyticsPanel,
+  keywords:  renderKeywordsPanel,
+  templates: renderTemplatesPanel
+};
+
+function switchPanel(name) {
+  if (!name || name === state.panel) return;
+  const current = document.querySelector('.panel.active');
+  const next    = document.getElementById('panel' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (!next) return;
+  if (current) {
+    current.classList.remove('active');
+    current.classList.add('exit');
+    setTimeout(() => current.classList.remove('exit'), 260);
+  }
+  next.classList.add('active');
+  state.panel = name;
+  // Update nav-item highlight in BOTH sidebar + bottom nav
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.panel === name);
+  });
+  // Render on demand
+  try { (PANEL_RENDERERS[name] || (()=>{}))(); } catch (e) { console.error(e); }
+  // Scroll top for the new panel
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => switchPanel(el.dataset.panel));
+});
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD PANEL
+// ═══════════════════════════════════════════════════════
+function renderDashboardPanel() {
+  const reviews = state.reviews || [];
+  const total = reviews.length;
+  const unread = reviews.filter(r => !r.read).length;
+  const pending = reviews.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status).length;
+  const rated = reviews.filter(r => Number(r.rating) > 0);
+  const avg = rated.length ? (rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length) : 0;
+
+  $('#stTotal').textContent   = total.toLocaleString();
+  $('#stAvg').textContent     = avg ? avg.toFixed(2) : '—';
+  $('#stUnread').textContent  = unread.toLocaleString();
+  $('#stPending').textContent = pending.toLocaleString();
+
+  // Sub stats — count by platform
+  const byPlat = {};
+  reviews.forEach(r => { byPlat[r.platform] = (byPlat[r.platform] || 0) + 1; });
+  $('#stTotalSub').textContent  = Object.keys(byPlat).map(k => byPlat[k] + ' ' + platName(k)).join(' · ');
+  $('#stAvgSub').textContent    = rated.length + ' rated';
+  $('#stUnreadSub').textContent = unread === 0 ? 'All caught up' : 'Needs attention';
+  $('#stUnreadSub').className   = 'stat-sub ' + (unread === 0 ? 'up' : 'down');
+  $('#stPendingSub').textContent = pending === 0 ? 'All replied' : 'Awaiting reply';
+  $('#stPendingSub').className   = 'stat-sub ' + (pending === 0 ? 'up' : 'down');
+
+  // This week's activity — last 7 days, by day
+  const now = Date.now();
+  const day = 86400000;
+  const buckets = []; // [{label, count}]
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now - i * day);
+    const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const start = new Date(d); start.setHours(0,0,0,0);
+    const end   = new Date(d); end.setHours(23,59,59,999);
+    const count = reviews.filter(r => {
+      const t = r.timestamp || (r.date ? Date.parse(r.date) : null);
+      return t && t >= +start && t <= +end;
+    }).length;
+    buckets.push({ label, count });
+  }
+  const max = Math.max(1, ...buckets.map(b => b.count));
+  $('#weekActivity').innerHTML = buckets.map(b => `
+    <div class="bar-row">
+      <div class="bar-label">${b.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(b.count/max*100)}%"></div></div>
+      <div class="bar-val">${b.count}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// ANALYTICS PANEL
+// ═══════════════════════════════════════════════════════
+function renderAnalyticsPanel() {
+  const reviews = state.reviews || [];
+  const total = reviews.length || 1;
+
+  // By platform
+  const plats = ['google','zomato','swiggy','heebee'];
+  const platCounts = plats.map(p => ({ key: p, label: platName(p), count: reviews.filter(r => r.platform === p).length }));
+  const maxP = Math.max(1, ...platCounts.map(x => x.count));
+  $('#chartByPlatform').innerHTML = platCounts.map(x => `
+    <div class="bar-row">
+      <div class="bar-label">${esc(x.label)}</div>
+      <div class="bar-track"><div class="bar-fill ${x.key}" style="width:${(x.count/maxP*100)}%"></div></div>
+      <div class="bar-val">${x.count}</div>
+    </div>`).join('');
+
+  // By branch
+  const branches = ['b1','b2','b3'];
+  const brCounts = branches.map(b => ({ key: b, label: branchName(b), count: reviews.filter(r => r.branch === b).length }));
+  const maxB = Math.max(1, ...brCounts.map(x => x.count));
+  $('#chartByBranch').innerHTML = brCounts.map(x => `
+    <div class="bar-row">
+      <div class="bar-label">${esc(x.label)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxB*100)}%"></div></div>
+      <div class="bar-val">${x.count}</div>
+    </div>`).join('');
+
+  // Rating distribution (1–5)
+  const dist = [5,4,3,2,1].map(n => ({ n, count: reviews.filter(r => Math.round(Number(r.rating)) === n).length }));
+  const maxR = Math.max(1, ...dist.map(x => x.count));
+  $('#chartByRating').innerHTML = dist.map(x => `
+    <div class="dist-row">
+      <div><span class="star">★</span>${x.n}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxR*100)}%;background:${
+        x.n >= 4 ? 'linear-gradient(90deg,#2e7d32,#51cf66)' :
+        x.n === 3 ? 'linear-gradient(90deg,#d97706,#fbbf24)' :
+                    'linear-gradient(90deg,#c62828,#ff6b6b)'
+      }"></div></div>
+      <div class="bar-val">${x.count}</div>
+    </div>`).join('');
+
+  // Reply status
+  const replied   = reviews.filter(r => r.status === 'replied').length;
+  const pending   = reviews.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status).length;
+  const escalated = reviews.filter(r => r.status === 'escalated').length;
+  const stats = [
+    { label: 'Replied',   count: replied,   color: 'linear-gradient(90deg,#2e7d32,#51cf66)' },
+    { label: 'Pending',   count: pending,   color: 'linear-gradient(90deg,#d97706,#fbbf24)' },
+    { label: 'Escalated', count: escalated, color: 'linear-gradient(90deg,#c62828,#ff6b6b)' }
+  ];
+  const maxS = Math.max(1, ...stats.map(x => x.count));
+  $('#chartByStatus').innerHTML = stats.map(x => `
+    <div class="bar-row">
+      <div class="bar-label">${x.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(x.count/maxS*100)}%;background:${x.color}"></div></div>
+      <div class="bar-val">${x.count}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// KEYWORDS PANEL — frequency analysis
+// ═══════════════════════════════════════════════════════
+const STOPWORDS = new Set(('a about above after again against all am an and any are aren as at be because been before being below between both but by could did do does doing don down during each few for from further had has have having he her here hers him his how i if in into is it its itself just me more most my myself no nor not now of off on once only or other our ours out over own same she should so some such than that the their theirs them then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself was had were ive im youre theyre weve us also one get got like would really very much went came came back food place coffee cafe staff service experience time good great nice amazing best better').split(/\s+/));
+
+function renderKeywordsPanel() {
+  const reviews = state.reviews || [];
+  const freq = {};
+  reviews.forEach(r => {
+    const text = String(r.text || '').toLowerCase();
+    const words = text.match(/[a-z][a-z']{2,}/g) || [];
+    words.forEach(w => {
+      if (STOPWORDS.has(w)) return;
+      if (w.length < 4) return;
+      freq[w] = (freq[w] || 0) + 1;
+    });
+  });
+  const top = Object.entries(freq).sort((a,b) => b[1] - a[1]).slice(0, 80);
+  const max = top.length ? top[0][1] : 1;
+  $('#kwCount').textContent = top.length + ' terms';
+  $('#kwCloud').innerHTML = top.map(([w, c]) => {
+    const scale = 0.75 + (c / max) * 0.8; // 0.75rem → 1.55rem
+    return `<span class="kw" style="font-size:${scale.toFixed(2)}rem" onclick="kwSearch('${esc(w)}')">${esc(w)}<span class="kw-c">${c}</span></span>`;
+  }).join('') || '<div style="font-size:.75rem;color:var(--text3);padding:8px;">No reviews to analyse yet.</div>';
+}
+
+window.kwSearch = function(word) {
+  switchPanel('reviews');
+  setTimeout(() => {
+    $('#searchInput').value = word;
+    state.search = word;
+    applyFilters();
+  }, 100);
+};
+
+// ═══════════════════════════════════════════════════════
+// TEMPLATES PANEL — list + add/edit/delete
+// ═══════════════════════════════════════════════════════
+function renderTemplatesPanel() {
+  const grid = $('#tplGrid');
+  const tpls = state.templates || [];
+  if (!tpls.length) {
+    grid.innerHTML = `
+      <div class="glass empty">
+        <span class="empty-icon">✎</span>
+        <div class="empty-title">No templates yet</div>
+        <div class="empty-msg">Add quick-reply templates to speed up responses.</div>
+      </div>`;
+    return;
+  }
+  grid.innerHTML = tpls.map(t => `
+    <div class="glass tpl-row" data-id="${esc(t.id)}">
+      <div class="tpl-name">${esc(t.name || 'Untitled')}</div>
+      <div class="tpl-text">${esc(t.text || '')}</div>
+      <div class="tpl-actions">
+        <button class="qbtn" onclick="tplEdit('${esc(t.id)}')">Edit</button>
+        <button class="qbtn danger" onclick="tplDelete('${esc(t.id)}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function tplOpenEditor(existing) {
+  const t = existing || { id: '', name: '', text: '' };
+  openModal(`
+    <div class="modal-head">
+      <div class="modal-title">${existing ? 'Edit template' : 'New template'}</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="field">
+      <label class="label">Name</label>
+      <input class="input" id="tplNameInput" value="${esc(t.name)}" placeholder="e.g. Thank you (5★)">
+    </div>
+    <div class="field">
+      <label class="label">Reply text</label>
+      <textarea class="tarea" id="tplTextInput" placeholder="Write the template…">${esc(t.text)}</textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="tplSave('${esc(t.id)}')">${existing ? 'Save changes' : 'Add template'}</button>
+    </div>
+  `);
+}
+
+window.tplEdit = function(id) {
+  const t = (state.templates || []).find(x => String(x.id) === String(id));
+  if (t) tplOpenEditor(t);
+};
+
+window.tplSave = async function(id) {
+  const name = $('#tplNameInput').value.trim();
+  const text = $('#tplTextInput').value.trim();
+  if (!name || !text) { toast('Name and text required', 'err'); return; }
+  const isNew = !id;
+  // Optimistic
+  const prev = state.templates.slice();
+  if (isNew) {
+    const tempId = 'tmp_' + Date.now();
+    state.templates.push({ id: tempId, name, text });
+  } else {
+    const t = state.templates.find(x => String(x.id) === String(id));
+    if (t) { t.name = name; t.text = text; }
+  }
+  closeModal();
+  renderTemplatesPanel();
+  toast(isNew ? 'Adding…' : 'Saving…');
+  try {
+    const res = await api('saveTemplate', { id: isNew ? '' : id, name, text });
+    if (!res.ok) throw new Error(res.error || 'Failed');
+    if (res.template) {
+      // Replace temp id with real id from server
+      if (isNew) {
+        const last = state.templates[state.templates.length - 1];
+        if (last) { last.id = res.template.id; }
+      }
+    }
+    toast(isNew ? 'Template added ✓' : 'Template saved ✓', 'ok');
+  } catch (e) {
+    state.templates = prev;
+    renderTemplatesPanel();
+    toast(e.message || 'Could not save', 'err');
+  }
+};
+
+window.tplDelete = async function(id) {
+  if (!confirm('Delete this template?')) return;
+  const prev = state.templates.slice();
+  state.templates = state.templates.filter(x => String(x.id) !== String(id));
+  renderTemplatesPanel();
+  toast('Deleting…');
+  try {
+    const res = await api('deleteTemplate', { id });
+    if (!res.ok) throw new Error(res.error || 'Failed');
+    toast('Template deleted ✓', 'ok');
+  } catch (e) {
+    state.templates = prev;
+    renderTemplatesPanel();
+    toast(e.message || 'Could not delete', 'err');
+  }
+};
+
+$('#tplAddBtn').addEventListener('click', () => tplOpenEditor(null));
+
+// Re-render Dashboard / Analytics / Keywords whenever reviews change
+const _origApplyFilters = applyFilters;
+applyFilters = function() {
+  _origApplyFilters();
+  // Re-render visible side panels with fresh data
+  if (state.panel === 'dashboard') renderDashboardPanel();
+  if (state.panel === 'analytics') renderAnalyticsPanel();
+  if (state.panel === 'keywords')  renderKeywordsPanel();
+};
 
 // ═══════════════════════════════════════════════════════
 // BOOT

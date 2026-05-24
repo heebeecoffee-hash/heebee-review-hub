@@ -64,6 +64,12 @@ function handleApi(p, method) {
       case 'fetchTemplates':
         return _json(_guard(p, () => ({ ok: true, templates: fetchTemplates() })));
 
+      case 'saveTemplate':
+        return _json(_guard(p, () => apiSaveTemplate(p.id, p.name, p.text)));
+
+      case 'deleteTemplate':
+        return _json(_guard(p, () => apiDeleteTemplate(p.id)));
+
       case 'fetchRatings':
         return _json(_guard(p, () => ({ ok: true, ratings: fetchRatings(p.branch || 'all') })));
 
@@ -239,6 +245,68 @@ function apiRegisterBiometric(p, credentialId) {
     sheet.appendRow([s.email, credentialId, new Date(), new Date()]);
   }
   return { ok: true };
+}
+
+// ══════════════════════════════════════════════════════
+// TEMPLATES — CRUD against the "Templates" sheet
+// ══════════════════════════════════════════════════════
+// Sheet columns (row 1 = header):  ID | Name | Text | CreatedAt | UpdatedAt
+function _ensureTemplatesSheet() {
+  let sheet = SS.getSheetByName('Templates');
+  if (!sheet) {
+    sheet = SS.insertSheet('Templates');
+    sheet.appendRow(['ID', 'Name', 'Text', 'CreatedAt', 'UpdatedAt']);
+    sheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#2D1B0E').setFontColor('#FFFFFF');
+  }
+  return sheet;
+}
+
+function apiSaveTemplate(id, name, text) {
+  name = String(name || '').trim();
+  text = String(text || '').trim();
+  if (!name || !text) return { ok: false, error: 'Name and text required' };
+
+  const sheet = _ensureTemplatesSheet();
+  const data  = sheet.getDataRange().getValues();
+  const now   = new Date();
+
+  // UPDATE existing
+  if (id) {
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(id)) {
+        sheet.getRange(i + 1, 2).setValue(name);
+        sheet.getRange(i + 1, 3).setValue(text);
+        sheet.getRange(i + 1, 5).setValue(now);
+        _clearTemplatesCache();
+        return { ok: true, template: { id: id, name: name, text: text } };
+      }
+    }
+    return { ok: false, error: 'Template not found' };
+  }
+
+  // CREATE new
+  const newId = 'tpl_' + now.getTime();
+  sheet.appendRow([newId, name, text, now, now]);
+  _clearTemplatesCache();
+  return { ok: true, template: { id: newId, name: name, text: text } };
+}
+
+function apiDeleteTemplate(id) {
+  if (!id) return { ok: false, error: 'Missing id' };
+  const sheet = _ensureTemplatesSheet();
+  const data  = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      _clearTemplatesCache();
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'Template not found' };
+}
+
+function _clearTemplatesCache() {
+  try { CacheService.getScriptCache().remove('templates_cache'); } catch (e) {}
 }
 
 function apiVerifyBiometric(email, credentialId) {
