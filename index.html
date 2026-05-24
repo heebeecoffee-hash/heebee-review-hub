@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Heebee Reviews">
 <meta name="theme-color" content="#1d1d1f">
@@ -718,24 +719,35 @@ function toast(msg, type = '') {
 // ═══════════════════════════════════════════════════════
 // API LAYER (fetch wrapper)
 // ═══════════════════════════════════════════════════════
-async function api(action, payload = {}) {
+async function api(action, payload = {}, timeoutMs = 180000) {
   const body = Object.assign({ action }, payload);
   if (state.session && state.session.token) body.token = state.session.token;
 
-  // GAS quirk: avoid CORS preflight by using text/plain
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body),
-    redirect: 'follow'
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  if (data && data.code === 'SESSION_EXPIRED') {
-    logout(true);
-    throw new Error('Session expired');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // GAS quirk: avoid CORS preflight by using text/plain
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data && data.code === 'SESSION_EXPIRED') {
+      logout(true);
+      throw new Error('Session expired');
+    }
+    return data;
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('Request timed out — GAS is slow on first load. Retry in a moment.');
+    throw e;
   }
-  return data;
 }
 
 // Queue for failed writes (offline / failed)
@@ -968,35 +980,75 @@ $('#bioDismissBtn').addEventListener('click', () => $('#bioPrompt').classList.re
 // ═══════════════════════════════════════════════════════
 async function loadAll() {
   renderSkeleton();
-  // Try cache
+  showLoadHint('Connecting…');
+
+  // 1. Serve cache instantly while we revalidate
   const cache = loadReviewsCache();
   if (cache) {
     state.reviews = cache.reviews;
     state.ratings = cache.ratings;
     applyFilters();
     renderRatings();
+    showLoadHint('Refreshing in background…');
   }
-  // Always revalidate
+
+  // 2. SEQUENTIAL — ratings first (warms GAS-side CacheService),
+  //    then reviews (reads from now-warm cache — fast).
+  //    Doing both in Promise.all causes a race: both hit fetchAllReviews()
+  //    simultaneously before cache is populated, so the reviews call
+  //    times out while ratings wins the race.
   try {
-    const [revRes, ratRes] = await Promise.all([
-      api('fetchReviews'),
-      api('fetchRatings', { branch: 'all' })
-    ]);
+    showLoadHint('Fetching ratings…');
+    const ratRes = await api('fetchRatings', { branch: 'all' });
+    if (ratRes.ok) {
+      state.ratings = ratRes.ratings;
+      renderRatings();
+      saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
+    }
+  } catch (e) {
+    // ratings fail is non-fatal — keep going
+  }
+
+  try {
+    const hint = state.reviews.length
+      ? 'Refreshing ' + state.reviews.length + '+ reviews…'
+      : 'Loading reviews… (first load takes ~30 s)';
+    showLoadHint(hint);
+    const revRes = await api('fetchReviews');
     if (revRes.ok) {
       state.reviews = revRes.reviews || [];
-      state.ratings = ratRes.ok ? ratRes.ratings : null;
       saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
       applyFilters();
-      renderRatings();
       updateBadge();
     } else {
       if (!cache) toast(revRes.error || 'Failed to load reviews', 'err');
     }
   } catch (e) {
-    if (!cache) toast('Offline — showing nothing cached', 'err');
+    if (!cache) toast(e.message || 'Network error — check connection', 'err');
+    else toast('Background refresh failed — showing cached data', '');
   }
-  // load templates in background
+
+  hideLoadHint();
+
+  // 3. Templates in background (non-blocking)
   api('fetchTemplates').then(r => { if (r.ok) state.templates = r.templates || []; }).catch(() => {});
+}
+
+function showLoadHint(msg) {
+  let el = $('#loadHint');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loadHint';
+    el.style.cssText = 'font-family:"Space Mono",monospace;font-size:.55rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);text-align:center;padding:8px 0 4px;transition:opacity .3s;';
+    const list = $('#reviewsList');
+    list.parentNode.insertBefore(el, list);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+}
+function hideLoadHint() {
+  const el = $('#loadHint');
+  if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
 }
 
 function loadReviewsCache() {
