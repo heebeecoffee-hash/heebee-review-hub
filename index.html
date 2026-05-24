@@ -481,20 +481,23 @@ body.dark .user-avatar { color:#0a0a0f; }
 .install-dismiss { background:transparent; border:none; color:var(--text3);
   cursor:pointer; font-size:1.1rem; padding:4px 6px; }
 
-/* BIO PROMPT for setting up biometric after login */
+/* BIO PROMPT — mobile: banner row; desktop: compact sidebar card */
 .bio-prompt {
   margin:0 0 10px;
-  padding:12px 16px; border-radius:14px;
+  padding:12px 14px; border-radius:14px;
   background:var(--surface2); border:1px solid var(--border);
-  display:none; align-items:center; gap:12px;
+  display:none; flex-direction:column; gap:8px;
 }
 .bio-prompt.show { display:flex; animation:panelReveal .4s ease; }
-/* On desktop, tuck it into the sidebar so it doesn't push the shell */
-@media (min-width:900px) {
-  .bio-prompt { margin:8px 0 0; font-size:.8rem; }
+.bio-prompt-text { font-size:.72rem; color:var(--text2); line-height:1.45; }
+.bio-prompt-text strong { color:var(--text); font-weight:400; display:block; margin-bottom:2px; }
+.bio-prompt-row { display:flex; align-items:center; gap:8px; }
+/* On mobile, show as a row */
+@media (max-width:899px) {
+  .bio-prompt { flex-direction:row; align-items:center; margin:0 0 12px; }
+  .bio-prompt-text { flex:1; }
+  .bio-prompt-row { flex-shrink:0; }
 }
-.bio-prompt-text { flex:1; font-size:.75rem; color:var(--text2); line-height:1.4; }
-.bio-prompt-text strong { color:var(--text); font-weight:400; }
 
 /* SECTION LABEL */
 .section-label { font-family:'Space Mono',monospace; font-size:.5rem; letter-spacing:3px;
@@ -566,8 +569,9 @@ body.signed-in .bottom-nav { display:flex; }
 .panel.active { display:block; animation:panelReveal .45s cubic-bezier(.4,0,.2,1) forwards; }
 .panel.exit   { display:block; animation:panelExit .25s cubic-bezier(.4,0,.2,1) forwards; pointer-events:none; }
 
-/* Sticky reviews header — frosted glass, locks below the sidebar's sticky offset */
-.reviews-sticky {
+/* Sticky panel header — frosted glass, used in Reviews + Dashboard */
+.reviews-sticky,
+.dash-sticky {
   position:sticky; top:0; z-index:50;
   backdrop-filter:saturate(180%) blur(24px);
   -webkit-backdrop-filter:saturate(180%) blur(24px);
@@ -576,8 +580,10 @@ body.signed-in .bottom-nav { display:flex; }
   margin:0 -2px; padding-left:2px; padding-right:2px;
   transition:border-color .4s ease;
 }
-body.light .reviews-sticky { background:rgba(245,245,247,.92); }
-body.dark  .reviews-sticky { background:rgba(10,10,15,.92); }
+body.light .reviews-sticky,
+body.light .dash-sticky { background:rgba(245,245,247,.92); }
+body.dark  .reviews-sticky,
+body.dark  .dash-sticky  { background:rgba(10,10,15,.92); }
 
 /* Section header inside a panel */
 .panel-head {
@@ -748,11 +754,14 @@ body.dark  .reviews-sticky { background:rgba(10,10,15,.92); }
         <button class="nav-item"        data-panel="keywords" ><span class="nav-ico">⌗</span><span>Keywords</span></button>
         <button class="nav-item"        data-panel="templates"><span class="nav-ico">✎</span><span>Templates</span></button>
         <div class="bio-prompt" id="bioPrompt">
-          <div class="bio-prompt-text" style="font-size:.72rem;">
-            <strong>Faster sign-in?</strong><br>Enable Face ID on this device.
+          <div class="bio-prompt-text">
+            <strong>Faster sign-in?</strong>
+            Enable Face ID / fingerprint on this device.
           </div>
-          <button class="install-cta" id="bioEnableBtn" style="font-size:.5rem;padding:6px 10px;">Enable</button>
-          <button class="install-dismiss" id="bioDismissBtn">×</button>
+          <div class="bio-prompt-row">
+            <button class="install-cta" id="bioEnableBtn" style="font-size:.5rem;padding:6px 10px;">Enable</button>
+            <button class="install-dismiss" id="bioDismissBtn">×</button>
+          </div>
         </div>
       </nav>
 
@@ -761,16 +770,19 @@ body.dark  .reviews-sticky { background:rgba(10,10,15,.92); }
 
         <!-- ◉ DASHBOARD ─────────────────────────── -->
         <section class="panel active" id="panelDashboard">
-          <div class="panel-head">
-            <div>
-              <div class="panel-sub">Overview</div>
-              <div class="panel-title">Dashboard</div>
-            </div>
-            <!-- Period selector -->
-            <div class="dash-period-wrap">
-              <button class="chip" data-period="week">Week</button>
-              <button class="chip on" data-period="month">Month</button>
-              <button class="chip" data-period="ytd">YTD</button>
+
+          <div class="dash-sticky">
+            <div class="panel-head">
+              <div>
+                <div class="panel-sub">Overview</div>
+                <div class="panel-title">Dashboard</div>
+              </div>
+              <!-- Period selector -->
+              <div class="dash-period-wrap">
+                <button class="chip" data-period="week">Week</button>
+                <button class="chip on" data-period="month">Month</button>
+                <button class="chip" data-period="ytd">YTD</button>
+              </div>
             </div>
           </div>
 
