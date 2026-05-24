@@ -71,13 +71,13 @@ function handleApi(p, method) {
         return _json(_guard(p, () => ({ ok: true, config: _publicConfig() })));
 
       case 'updateReview':
-        return _json(_guard(p, () => updateReview(p.id, p.updates || {})));
+        return _json(_guard(p, () => _normalize(updateReview(p.id, p.updates || {}))));
 
       case 'saveManualReview':
-        return _json(_guard(p, () => saveManualReview(p.review || {})));
+        return _json(_guard(p, () => _normalize(saveManualReview(p.review || {}))));
 
       case 'postGoogleReply':
-        return _json(_guard(p, () => postGoogleReply(p.reviewId, p.replyText)));
+        return _json(_guard(p, () => _normalize(postGoogleReply(p.reviewId, p.replyText))));
 
       case 'clearCache':
         return _json(_guard(p, () => ({ ok: true, msg: clearReviewsCache() })));
@@ -101,6 +101,16 @@ function _json(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Normalize legacy {success:true/false} responses to {ok:true/false}
+// so the frontend always has a consistent shape to check.
+function _normalize(result) {
+  if (!result || typeof result !== 'object') return { ok: false, error: 'No response' };
+  if (result.ok !== undefined) return result; // already normalized
+  if (result.success === true)  return { ok: true };
+  if (result.success === false) return { ok: false, error: result.error || 'Operation failed' };
+  return Object.assign({ ok: true }, result); // pass through any extra fields
 }
 
 // ══════════════════════════════════════════════════════
