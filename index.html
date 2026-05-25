@@ -883,11 +883,42 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
      Opacity-only runs on the compositor thread with zero main-thread cost. */
   .panel.active { animation: mobileReveal 0.18s ease forwards !important; }
   .panel.exit   { animation: mobileExit  0.14s ease forwards !important; }
+
+  /* ── Remove sticky filter bar on mobile — it jitters as reviews scroll under it.
+     Users get a scroll-to-top FAB instead (added below). */
+  .reviews-sticky { position:static !important; }
+
+  /* ── Scroll-to-top FAB ── */
+  #scrollTopBtn {
+    display:flex;
+    position:fixed;
+    bottom:80px; right:18px;
+    width:44px; height:44px;
+    border-radius:50%;
+    background:var(--accent);
+    color:#fff;
+    font-size:20px;
+    align-items:center; justify-content:center;
+    border:none;
+    box-shadow:0 4px 16px rgba(0,0,0,.35);
+    z-index:900;
+    opacity:0; pointer-events:none;
+    transition:opacity .2s ease;
+  }
+  #scrollTopBtn.visible { opacity:1; pointer-events:auto; }
+}
+
+/* On desktop the FAB is never shown */
+@media (min-width:768px) {
+  #scrollTopBtn { display:none !important; }
 }
 
 </style>
 </head>
 <body class="light">
+
+<!-- Scroll-to-top FAB — mobile only, shown after 200px scroll -->
+<button id="scrollTopBtn" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 <div class="bg-layer">
   <div class="bg-orb orb1"></div>
@@ -2172,6 +2203,15 @@ function switchPanel(name) {
 document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => switchPanel(el.dataset.panel));
 });
+
+// Scroll-to-top FAB — show after 200px, hide at top
+(function() {
+  const btn = document.getElementById('scrollTopBtn');
+  if (!btn) return;
+  window.addEventListener('scroll', function() {
+    btn.classList.toggle('visible', window.scrollY > 200);
+  }, { passive: true });
+})();
 
 // ═══════════════════════════════════════════════════════
 // DASHBOARD PANEL — period-aware with % comparison
