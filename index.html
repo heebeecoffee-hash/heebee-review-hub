@@ -1599,7 +1599,14 @@ function applyFilters() {
   if (state.tab === 'pending') list = list.filter(r => r.status === 'pending' || r.status === 'unread');
   if (state.platform !== 'all') list = list.filter(r => r.platform === state.platform);
   if (state.branch !== 'all')   list = list.filter(r => r.branch === state.branch);
-  if (state.search) {
+  // Theme filter: OR-match any keyword in the theme (set by filterByTheme())
+  if (state.themeFilter && state.themeFilter.length) {
+    const keys = state.themeFilter;
+    list = list.filter(r => {
+      const text = (r.text || '').toLowerCase();
+      return keys.some(k => text.includes(k));
+    });
+  } else if (state.search) {
     const q = state.search.toLowerCase();
     list = list.filter(r =>
       (r.reviewer || '').toLowerCase().includes(q) ||
@@ -1971,6 +1978,7 @@ $$('.tab').forEach(t => t.addEventListener('click', () => {
   $$('.tab').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   state.tab = t.dataset.tab;
+  state.themeFilter = null; // clear any active theme filter when user picks a tab
   applyFilters();
 }));
 $('#platformChips').addEventListener('click', e => {
@@ -1991,6 +1999,7 @@ $('#branchChips').addEventListener('click', e => {
 });
 $('#searchInput').addEventListener('input', debounce(e => {
   state.search = e.target.value.trim();
+  state.themeFilter = null; // manual search overrides theme filter
   applyFilters();
 }, 180));
 
@@ -2488,12 +2497,35 @@ function renderKeywordsPanel() {
 }
 
 window.kwSearch = function(word) {
+  state.themeFilter = null;
   switchPanel('reviews');
   setTimeout(() => {
     $('#searchInput').value = word;
     state.search = word;
     applyFilters();
   }, 100);
+};
+
+// filterByTheme: called from Intelligence theme cards.
+// Matches ALL keywords of the theme (OR logic) so "espresso", "latte",
+// "cappuccino" etc. all surface under Coffee Quality — not just "coffee".
+window.filterByTheme = function(themeKey) {
+  const theme = INTEL_THEMES.find(t => t.key === themeKey);
+  if (!theme) return;
+  // 1. Reset tab to "All" so the theme filter isn't further restricted
+  state.tab = 'all';
+  $$('.tab').forEach(x => x.classList.remove('active'));
+  const allTab = document.querySelector('.tab[data-tab="all"]');
+  if (allTab) allTab.classList.add('active');
+  // 2. Clear text search
+  state.search = '';
+  const si = $('#searchInput');
+  if (si) si.value = '';
+  // 3. Set theme keyword list — applyFilters OR-matches all of them
+  state.themeFilter = theme.keys;
+  // 4. Switch to reviews and render
+  switchPanel('reviews');
+  applyFilters();
 };
 
 // ═══════════════════════════════════════════════════════
@@ -2717,10 +2749,9 @@ function renderIntelligencePanel() {
   // ── Recurring theme cards ─────────────────────────────
   $('#intelThemes').innerHTML = themes.length
     ? themes.slice(0,8).map(th => {
-        const tot = Math.max(1, th.pos + th.neg);
-        const posPct = Math.round(th.pos/tot*100);
+        const posPlusNeg = Math.max(1, th.pos + th.neg);
         return `
-          <div class="theme-card" style="cursor:pointer;" onclick="switchPanel('reviews');setTimeout(()=>{$('#searchInput').value='${th.keys[0]}';state.search='${th.keys[0]}';applyFilters();},120)">
+          <div class="theme-card" style="cursor:pointer;" onclick="filterByTheme('${th.key}')">
             <div class="theme-name">${th.icon} ${esc(th.name)}</div>
             <div><span class="theme-count">${th.total}</span><span class="theme-unit"> mentions</span></div>
             <div class="theme-bars" style="margin-top:10px;">
@@ -2728,9 +2759,8 @@ function renderIntelligencePanel() {
               <div class="theme-neg-bar" style="flex:${th.neg};min-width:${th.neg?2:0}px"></div>
             </div>
             <div class="theme-sentiment">
-              <span class="theme-pos">+${th.pos}</span>
-              <span class="theme-neg">−${th.neg}</span>
-              ${th.neutral?`<span style="color:var(--text3)">·${th.neutral}</span>`:''}
+              <span class="theme-pos" title="${th.pos} positive (4-5★)">+${th.pos} positive</span>
+              <span class="theme-neg" title="${th.neg} negative (1-2★)">−${th.neg} negative</span>
             </div>
           </div>`;
       }).join('')
