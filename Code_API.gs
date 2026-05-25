@@ -390,9 +390,9 @@ function setupKeepAliveTrigger() {
   });
   ScriptApp.newTrigger('keepAliveJob')
     .timeBased()
-    .everyMinutes(4)
+    .everyMinutes(5)
     .create();
-  Logger.log('Keep-alive trigger created — fires every 4 minutes.');
+  Logger.log('Keep-alive trigger created — fires every 5 minutes.');
 }
 
 function keepAliveJob() {
