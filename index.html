@@ -1251,7 +1251,7 @@ const SESSION_KEY = 'heebee_rh_session_v1';
 const THEME_KEY   = 'heebee_rh_theme';
 const BIO_KEY     = 'heebee_rh_bio_credential';
 const REVIEWS_CACHE_KEY = 'heebee_rh_reviews_cache_v1';
-const REVIEWS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const REVIEWS_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 const QUEUE_KEY = 'heebee_rh_queue_v1';
 const PAGE_SIZE = 10;
 
@@ -1392,7 +1392,7 @@ function saveSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); 
 function logout(silent) {
   state.session = null;
   localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(REVIEWS_CACHE_KEY);
+  // Keep review cache across logout — next login shows data instantly while GAS warms
   state.reviews = []; state.filtered = []; state.rendered = 0;
   $('#dashView').style.display = 'none';
   $('#loginView').style.display = 'block';
@@ -1593,9 +1593,16 @@ async function loadAll() {
     showLoadHint('Connecting to Heebee servers…');
   }
 
+  // ── Wait for GAS to warm before firing real requests ────
+  // Ping was fired at page-load (boot). Awaiting it here ensures the GAS
+  // runtime is already hot when the data requests land — drops response
+  // time from 20s (cold) to ~1-2s (warm). 25s timeout guards against hangs.
+  await Promise.race([
+    window._gasWarm || Promise.resolve(),
+    new Promise(r => setTimeout(r, 25000))
+  ]);
+
   // ── Steps 2+3: Ratings + Reviews IN PARALLEL (D1) ───────
-  // Previously sequential — ratings awaited before reviews started.
-  // Now both fire at the same time; we handle each as it resolves.
   showLoadHint(state.reviews.length ? '↻ Loading latest reviews…' : 'Loading reviews…');
   try {
     const [ratRes, revRes] = await Promise.all([
@@ -1691,7 +1698,7 @@ function loadReviewsCache() {
     const raw = localStorage.getItem(REVIEWS_CACHE_KEY);
     if (!raw) return null;
     const c = JSON.parse(raw);
-    if (Date.now() - c.at > REVIEWS_CACHE_TTL * 6) return null; // hard cap 30min
+    if (Date.now() - c.at > REVIEWS_CACHE_TTL) return null;
     return c;
   } catch { return null; }
 }
@@ -3184,11 +3191,14 @@ applyFilters = function() {
   // its runtime while the user is still on the login screen / reading the PIN.
   // Uses fetch directly (no token needed) so it doesn't go through the auth queue.
   // Fire-and-forget — we don't await or care about the response.
-  fetch(API_URL, {
+  // Store the warm-up promise so loadAll() can await it before firing real requests.
+  // Ping + data in parallel both hit cold GAS and both wait 20s.
+  // Awaiting ping first means data fires against an already-warm runtime (~1-2s).
+  window._gasWarm = fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: 'ping' })
-  }).catch(() => {});   // silent — this is purely a warm-up shot
+  }).catch(() => {});
 
   updateBioButton();
   const s = loadSession();
