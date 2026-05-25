@@ -24,7 +24,7 @@ body {
   margin:0; font-family:'Nunito Sans',sans-serif; font-weight:400;
   -webkit-font-smoothing:antialiased; background:var(--bg); color:var(--text);
   min-height:100vh;
-  transition:background .55s cubic-bezier(.4,0,.2,1), color .55s cubic-bezier(.4,0,.2,1);
+  transition:background .3s ease, color .3s ease;
   overscroll-behavior-y:contain;
   /* overflow-x:hidden removed — it kills backdrop-filter + position:sticky */
 }
@@ -865,6 +865,9 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
     -webkit-backdrop-filter: none !important;
   }
 
+  /* Suppress all transitions during theme swap — prevents mass-layout freeze */
+  body.no-transition * { transition: none !important; }
+
   /* ── Remove transitions from review cards — even un-triggered transitions
      force the browser to track paint layers for every card on scroll ── */
   .review,
@@ -895,8 +898,8 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
     bottom:80px; right:18px;
     width:44px; height:44px;
     border-radius:50%;
-    background:var(--accent);
-    color:#fff;
+    background:var(--btn-bg);
+    color:var(--btn-fg);
     font-size:20px;
     align-items:center; justify-content:center;
     border:none;
@@ -1404,11 +1407,14 @@ function logout(silent) {
 // THEME
 // ═══════════════════════════════════════════════════════
 function setTheme(t) {
+  // Freeze all transitions for one frame so hundreds of elements don't
+  // simultaneously animate — this was causing the UI to lock up on toggle.
+  document.body.classList.add('no-transition');
   document.body.classList.remove('light','dark');
   document.body.classList.add(t);
+  requestAnimationFrame(() => document.body.classList.remove('no-transition'));
   localStorage.setItem(THEME_KEY, t);
   $('#themeBtn').textContent = t === 'light' ? '☾' : '☀';
-  // theme-color meta for PWA
   let meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = (t === 'light') ? '#f5f5f7' : '#0a0a0f';
 }
