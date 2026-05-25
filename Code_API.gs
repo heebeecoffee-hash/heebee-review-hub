@@ -53,7 +53,7 @@ function handleApi(p, method) {
 
       // ── PROTECTED — require valid session token ────
       case 'fetchReviews':
-        return _json(_guard(p, () => ({ ok: true, reviews: fetchAllReviews() })));
+        return _json(_guard(p, () => ({ ok: true, reviews: _cachedReviews() })));
 
       case 'fetchReviewsChunked':
         return _json(_guard(p, () => ({
@@ -86,7 +86,13 @@ function handleApi(p, method) {
         return _json(_guard(p, () => _normalize(postGoogleReply(p.reviewId, p.replyText))));
 
       case 'clearCache':
-        return _json(_guard(p, () => ({ ok: true, msg: clearReviewsCache() })));
+        return _json(_guard(p, () => { _bustReviewsCache(); return { ok: true, msg: 'Cache cleared' }; }));
+
+      // ── KEEP-ALIVE (called by time-trigger, no auth needed) ──
+      case 'keepAlive':
+        _bustReviewsCache();                       // also pre-warm the cache
+        try { _cachedReviews(); } catch(e) {}      // loads + stores fresh data
+        return _json({ ok: true, warmed: new Date().toISOString() });
 
       // ── WebAuthn / biometric (face/fingerprint) ────
       case 'registerBiometric':
@@ -308,6 +314,104 @@ function apiDeleteTemplate(id) {
 function _clearTemplatesCache() {
   try { CacheService.getScriptCache().remove('templates_cache'); } catch (e) {}
 }
+
+// ══════════════════════════════════════════════════════
+// REVIEWS CACHE  (A2)
+// ══════════════════════════════════════════════════════
+// GAS CacheService holds up to 100 KB per key for up to 6 hours.
+// We split into chunks of 90 KB to stay safely under the limit.
+// On a warm GAS instance this is a memcache read — typically <200 ms.
+// On a cold start the first call still hits the sheet, but every
+// subsequent call (including the keep-alive) is instant.
+const _RC_KEY    = 'hrh_reviews_v2';   // base cache key
+const _RC_IDX    = 'hrh_reviews_idx';  // stores chunk count
+const _RC_TTL    = 21600;              // 6 hours in seconds
+const _RC_CHUNK  = 90000;             // 90 KB per chunk (safe margin under 100 KB limit)
+
+function _cachedReviews() {
+  const cache = CacheService.getScriptCache();
+  try {
+    const idxRaw = cache.get(_RC_IDX);
+    if (idxRaw) {
+      const chunks = Number(idxRaw);
+      let json = '';
+      for (let i = 0; i < chunks; i++) {
+        const part = cache.get(_RC_KEY + '_' + i);
+        if (part === null) { json = null; break; }   // chunk expired — rebuild
+        json += part;
+      }
+      if (json) return JSON.parse(json);
+    }
+  } catch (e) {}   // cache miss or parse error — fall through to sheet read
+
+  // Cache miss — read sheet and store
+  const reviews = fetchAllReviews();
+  _storeReviewsCache(cache, reviews);
+  return reviews;
+}
+
+function _storeReviewsCache(cache, reviews) {
+  try {
+    const json   = JSON.stringify(reviews);
+    const chunks = Math.ceil(json.length / _RC_CHUNK);
+    const pairs  = {};
+    pairs[_RC_IDX] = String(chunks);
+    for (let i = 0; i < chunks; i++) {
+      pairs[_RC_KEY + '_' + i] = json.slice(i * _RC_CHUNK, (i + 1) * _RC_CHUNK);
+    }
+    cache.putAll(pairs, _RC_TTL);
+  } catch (e) {}   // non-fatal — just won't be cached this time
+}
+
+function _bustReviewsCache() {
+  try {
+    const cache  = CacheService.getScriptCache();
+    const idxRaw = cache.get(_RC_IDX);
+    const keys   = [_RC_IDX];
+    if (idxRaw) {
+      const chunks = Number(idxRaw);
+      for (let i = 0; i < chunks; i++) keys.push(_RC_KEY + '_' + i);
+    }
+    cache.removeAll(keys);
+  } catch (e) {}
+}
+
+// ══════════════════════════════════════════════════════
+// KEEP-ALIVE TRIGGER  (A1)
+// ══════════════════════════════════════════════════════
+// Run setupKeepAliveTrigger() ONCE from the GAS editor (Run menu).
+// It creates a time-based trigger that calls keepAliveJob() every 4 minutes.
+// keepAliveJob() busts the stale cache and pre-warms a fresh one so the
+// script runtime never goes cold and review fetches are always sub-second.
+function setupKeepAliveTrigger() {
+  // Remove any existing keep-alive triggers first to avoid duplicates
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'keepAliveJob') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('keepAliveJob')
+    .timeBased()
+    .everyMinutes(4)
+    .create();
+  Logger.log('Keep-alive trigger created — fires every 4 minutes.');
+}
+
+function keepAliveJob() {
+  // Bust stale cache, then immediately pre-warm with fresh sheet data.
+  // Runs on GAS infrastructure — zero frontend involvement.
+  _bustReviewsCache();
+  try {
+    const reviews = fetchAllReviews();
+    _storeReviewsCache(CacheService.getScriptCache(), reviews);
+    Logger.log('Keep-alive OK — ' + reviews.length + ' reviews cached at ' + new Date().toISOString());
+  } catch (e) {
+    Logger.log('Keep-alive error: ' + e.message);
+  }
+}
+
+// Also bust the reviews cache whenever a review is mutated so the
+// next fetchReviews call returns fresh data rather than stale cache.
+// Call this at the top of updateReview() and saveManualReview() in Code.gs.
+function bustReviewsCachePublic() { _bustReviewsCache(); }
 
 function apiVerifyBiometric(email, credentialId) {
   if (!email || !credentialId) return { ok: false, error: 'Missing fields' };

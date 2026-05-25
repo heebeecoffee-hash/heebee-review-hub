@@ -814,6 +814,47 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
   .analytics-grid { grid-template-columns:1fr !important; }
 }
 
+/* ── MOBILE PERFORMANCE  (B1 + B2) ──────────────────────
+   backdrop-filter:blur() forces the GPU to composite every
+   blurred layer on every scroll frame — the #1 cause of jank
+   on mid-range phones. On screens ≤767 px we swap every glass
+   surface to a solid semi-transparent background (same visual
+   hierarchy, zero GPU tax). Ambient orbs are also hidden — a
+   500 px element with filter:blur(90px) + animation running
+   continuously is a free GPU stressor.
+──────────────────────────────────────────────────────── */
+@media (max-width:767px) {
+  /* Kill ambient orb animation entirely */
+  .bg-orb { display:none !important; }
+
+  /* Replace blur with solid surfaces on every glass element */
+  .glass,
+  .icon-btn,
+  .modal,
+  .bottom-nav,
+  .dash-sticky,
+  .sidebar,
+  .review-card,
+  .plat-card,
+  .kpi-card,
+  .insight-tile,
+  .chart-card,
+  .action-card,
+  .theme-card,
+  .intel-summary,
+  .tpl-row,
+  .install-toast,
+  .skel-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Tighten transition times — long transitions feel slow on low-FPS devices */
+  * { transition-duration: 0.15s !important; }
+  /* Exception: keep panel reveal animation at reasonable speed */
+  .panel.active { animation-duration: 0.25s !important; }
+}
+
 </style>
 </head>
 <body class="light">
@@ -1485,26 +1526,28 @@ async function loadAll() {
     showLoadHint('Connecting to Heebee servers…');
   }
 
-  // ── Step 2: Ratings (warms GAS CacheService) ─────────
+  // ── Steps 2+3: Ratings + Reviews IN PARALLEL (D1) ───────
+  // Previously sequential — ratings awaited before reviews started.
+  // Now both fire at the same time; we handle each as it resolves.
+  showLoadHint(state.reviews.length ? '↻ Loading latest reviews…' : 'Loading reviews…');
   try {
-    const ratRes = await api('fetchRatings', { branch: 'all' }, 60000);
+    const [ratRes, revRes] = await Promise.all([
+      api('fetchRatings', { branch: 'all' }, 60000).catch(() => ({ ok: false })),
+      api('fetchReviews', {}, 180000).catch(e => ({ ok: false, _err: e }))
+    ]);
+
     if (ratRes.ok) {
       state.ratings = ratRes.ratings;
       renderRatings();
     }
-  } catch (_) {}            // non-fatal
 
-  // ── Step 3: Full reviews — progressive render ─────────
-  try {
-    showLoadHint(state.reviews.length ? '↻ Loading latest reviews…' : 'Loading reviews… (first load ~30s on cold start)');
-    const revRes = await api('fetchReviews', {}, 180000);
     if (revRes.ok) {
       state.reviews = revRes.reviews || [];
       saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
-      await applyFiltersProgressive();   // stream first 5 instantly, rest in background
+      await applyFiltersProgressive();
       updateBadge();
     } else if (!cache) {
-      toast(revRes.error || 'Failed to load', 'err');
+      toast((revRes && revRes._err && revRes._err.message) || 'Failed to load reviews', 'err');
     }
   } catch (e) {
     if (!cache) toast('Could not connect — check internet', 'err');
@@ -2064,9 +2107,9 @@ if ('serviceWorker' in navigator) {
 // ═══════════════════════════════════════════════════════
 state.panel = 'dashboard';
 const PANEL_RENDERERS = {
-  dashboard:    renderDashboardPanel,
+  dashboard:    renderDashboardPanelMemo,    // C1: memoized + rAF (C2)
   reviews:      () => {},
-  intelligence: renderIntelligencePanel,
+  intelligence: renderIntelligencePanelMemo, // C1: memoized + rAF (C2)
   templates:    renderTemplatesPanel
 };
 
@@ -2884,11 +2927,62 @@ window.tplDelete = async function(id) {
 
 $('#tplAddBtn').addEventListener('click', () => tplOpenEditor(null));
 
-// Re-render Dashboard / Analytics / Keywords whenever reviews change
+// ═══════════════════════════════════════════════════════
+// PANEL RENDER MEMOIZATION  (C1 + C2)
+// ═══════════════════════════════════════════════════════
+// Problem: renderDashboardPanel() and renderIntelligencePanel() rebuild
+// all HTML from scratch on every panel tap, even when reviews haven't changed.
+// Fix: cache the last rendered HTML keyed to reviews array length + first id.
+// Cache hit → innerHTML swap in ~0 ms. Miss → rebuild + rAF so the panel
+// slide animation finishes before heavy JS starts.
+const _panelCache = {};
+let   _panelCacheKey = '';   // fingerprint of current reviews
+
+function _reviewsCacheKey() {
+  const r = state.reviews;
+  if (!r || !r.length) return 'empty';
+  // length + first + last id — cheap, catches additions and edits
+  return r.length + '|' + (r[0] && r[0].id) + '|' + (r[r.length-1] && r[r.length-1].id);
+}
+
+function _memoPanel(name, renderFn, containerSelector) {
+  const key = _reviewsCacheKey();
+  if (_panelCache[name] && _panelCache[name].key === key) {
+    // Cache hit — swap HTML instantly, no recompute
+    const el = $(containerSelector);
+    if (el) el.innerHTML = _panelCache[name].html;
+    return;
+  }
+  // Cache miss — defer render past the animation frame so the panel
+  // slide completes before we block the main thread (C2)
+  requestAnimationFrame(() => {
+    renderFn();
+    // Store what was rendered
+    const el = $(containerSelector);
+    if (el) _panelCache[name] = { key, html: el.innerHTML };
+  });
+}
+
+// Wrapped versions used by the panel switcher
+function renderDashboardPanelMemo() {
+  _memoPanel('dashboard', renderDashboardPanel, '#panelDashboard .panel-scroll-body, #panelDashboard');
+}
+function renderIntelligencePanelMemo() {
+  _memoPanel('intelligence', renderIntelligencePanel, '#panelIntelligence');
+}
+
+// Bust cache whenever reviews change so next render is fresh
+function _bustPanelCache() {
+  _panelCache.dashboard    = null;
+  _panelCache.intelligence = null;
+}
+
+// Re-render visible panel whenever reviews change
+// Bust panel cache first so stale HTML is never reused after a data change
 const _origApplyFilters = applyFilters;
 applyFilters = function() {
+  _bustPanelCache();
   _origApplyFilters();
-  // Re-render visible side panels with fresh data
   if (state.panel === 'dashboard')    renderDashboardPanel();
   if (state.panel === 'intelligence') renderIntelligencePanel();
 };
@@ -2897,6 +2991,16 @@ applyFilters = function() {
 // BOOT
 // ═══════════════════════════════════════════════════════
 (function boot() {
+  // A3 — Pre-warm: fire a ping the instant the page loads so GAS spins up
+  // its runtime while the user is still on the login screen / reading the PIN.
+  // Uses fetch directly (no token needed) so it doesn't go through the auth queue.
+  // Fire-and-forget — we don't await or care about the response.
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'ping' })
+  }).catch(() => {});   // silent — this is purely a warm-up shot
+
   updateBioButton();
   const s = loadSession();
   if (s) {
