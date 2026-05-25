@@ -1672,13 +1672,12 @@ function applyFilters() {
   if (state.tab === 'pending') list = list.filter(r => r.status === 'pending' || r.status === 'unread');
   if (state.platform !== 'all') list = list.filter(r => r.platform === state.platform);
   if (state.branch !== 'all')   list = list.filter(r => r.branch === state.branch);
-  // Theme filter: OR-match any keyword in the theme (set by filterByTheme())
-  if (state.themeFilter && state.themeFilter.length) {
-    const keys = state.themeFilter;
-    list = list.filter(r => {
-      const text = (r.text || '').toLowerCase();
-      return keys.some(k => text.includes(k));
-    });
+  // Theme filter: semantic match using _matchesTheme (set by filterByTheme())
+  if (state.themeFilter) {
+    const theme = INTEL_THEMES.find(t => t.key === state.themeFilter);
+    if (theme) {
+      list = list.filter(r => _matchesTheme(r.text || '', theme));
+    }
   } else if (state.search) {
     const q = state.search.toLowerCase();
     list = list.filter(r =>
@@ -2594,42 +2593,156 @@ window.filterByTheme = function(themeKey) {
   state.search = '';
   const si = $('#searchInput');
   if (si) si.value = '';
-  // 3. Set theme keyword list — applyFilters OR-matches all of them
-  state.themeFilter = theme.keys;
+  // 3. Store theme key — applyFilters uses _matchesTheme() for semantic matching
+  state.themeFilter = theme.key;
   // 4. Switch to reviews and render
   switchPanel('reviews');
   applyFilters();
 };
 
 // ═══════════════════════════════════════════════════════
-// INTELLIGENCE PANEL — Client-side NLP engine
+// INTELLIGENCE PANEL — Semantic theme engine v2
 // ═══════════════════════════════════════════════════════
+//
+// Why v1 failed: pure substring matching ("work" matched "takes his work
+// seriously" → WiFi theme). Single words have multiple meanings depending
+// on context. This version uses three layers:
+//
+//   1. patterns   — specific single words (word-boundary matched, not substring)
+//                   or multi-word phrases (all words must appear). Phrases
+//                   score 2×; single words score 1.
+//   2. antiSignals — if ANY of these phrases appear the review is vetoed from
+//                   this theme entirely, even if a pattern matches. Used to
+//                   block cross-contamination (e.g. "work" in a staff review
+//                   must not fire the WiFi theme).
+//   3. minScore   — minimum match score required. Themes with broad single-word
+//                   patterns require ≥2 to reduce noise.
 
 const INTEL_THEMES = [
-  { key:'coffee',   name:'Coffee Quality',    icon:'☕',
-    keys:['coffee','espresso','latte','cappuccino','americano','brew','beans','roast','cold brew','macchiato','mocha','chai','cortado'] },
-  { key:'food',     name:'Food & Menu',        icon:'🥐',
-    keys:['food','sandwich','cake','pastry','snack','meal','breakfast','dessert','waffle','toast','bagel','muffin','croissant','salad','wrap','bite'] },
-  { key:'staff',    name:'Staff & Service',    icon:'🤝',
-    keys:['staff','service','friendly','rude','helpful','attentive','polite','waiter','barista','team','crew','manager','owner','behavior','behaviour'] },
-  { key:'ambience', name:'Ambience',           icon:'🏡',
-    keys:['ambience','atmosphere','vibe','decor','music','seating','comfortable','crowded','cozy','cosy','place','space','interior','aesthetic','lighting'] },
-  { key:'wait',     name:'Wait Time',          icon:'⏱',
-    keys:['wait','waiting','delay','queue','quick','fast','slow','forever','prompt','speedy','rush','hurry','minutes','hour','late'] },
-  { key:'price',    name:'Pricing & Value',    icon:'💰',
-    keys:['price','expensive','cheap','value','worth','overpriced','cost','money','bill','affordable','reasonable','pricey','pocket','budget'] },
-  { key:'hygiene',  name:'Cleanliness',        icon:'🧹',
-    keys:['clean','dirty','hygiene','mess','washroom','toilet','bathroom','smell','stain','tidy','maintained','dusty','odor','odour'] },
-  { key:'wifi',     name:'WiFi & Workspace',   icon:'📶',
-    keys:['wifi','internet','work','laptop','socket','plug','connection','charging','study','outlet'] },
+  {
+    key: 'coffee', name: 'Coffee Quality', icon: '☕',
+    // Very specific — coffee drink names rarely appear in non-coffee contexts
+    patterns: ['coffee','espresso','latte','cappuccino','americano','cold brew',
+               'macchiato','mocha','chai','cortado','flat white','filter coffee',
+               'cold coffee','hot coffee','iced coffee','pour over','drip coffee',
+               'coffee beans','coffee quality','coffee taste','coffee flavour','coffee flavor'],
+    antiSignals: [],
+    minScore: 1
+  },
+  {
+    key: 'food', name: 'Food & Menu', icon: '🥐',
+    patterns: ['food','sandwich','cake','pastry','snack','meal','breakfast','dessert',
+               'waffle','toast','bagel','muffin','croissant','salad','wrap','bite',
+               'menu','dish','portion','serving','stale food','fresh food',
+               'food quality','food was','taste of food','the food'],
+    antiSignals: [],
+    minScore: 1
+  },
+  {
+    key: 'staff', name: 'Staff & Service', icon: '🤝',
+    // Broad — staff reviews are the most common, so keep coverage wide
+    patterns: ['staff','barista','waiter','server','manager','owner','employee',
+               'crew member','team member','service','behaviour','behavior',
+               'polite','rude','friendly','helpful','attentive','professional',
+               'courteous','humble','kind staff','good staff','bad staff',
+               'customer service','takes care','takes orders','customer satisfaction',
+               'respectful','well behaved','misbehaved'],
+    antiSignals: [],
+    minScore: 1
+  },
+  {
+    key: 'ambience', name: 'Ambience & Vibe', icon: '🏡',
+    patterns: ['ambience','ambiance','atmosphere','vibe','decor','interior design',
+               'seating','comfortable seats','cozy','cosy','crowded','peaceful',
+               'aesthetic','lighting','background music','too loud','too noisy',
+               'nice place','beautiful place','great place','love the place',
+               'the cafe itself','sitting area','outdoor seating'],
+    // "place" alone is too generic — only keep if paired with an evaluative word
+    antiSignals: [],
+    minScore: 1
+  },
+  {
+    key: 'wait', name: 'Wait Time', icon: '⏱',
+    // Removed bare "slow", "fast", "quick" — too ambiguous (internet speed, music tempo etc.)
+    // Use PHRASES that clearly describe time waiting for food/coffee
+    patterns: ['wait time','waiting time','long wait','took forever','so long to',
+               'took so long','waited for','waiting for order','order took',
+               'delivery took','service was slow','service was fast','quick service',
+               'prompt service','slow service','fast delivery','delayed order',
+               'no wait','had to wait','standing in queue','long queue'],
+    // Veto if clearly about internet/connectivity — "connection was slow"
+    antiSignals: ['internet slow','wifi slow','connection slow','network slow',
+                  'loading slow','page slow'],
+    minScore: 1
+  },
+  {
+    key: 'price', name: 'Pricing & Value', icon: '💰',
+    // "value" alone is ambiguous; use "value for money", "value for price" etc.
+    patterns: ['price','expensive','cheap','overpriced','value for money',
+               'worth the price','pocket friendly','budget friendly','affordable',
+               'reasonable price','too costly','very costly','bit pricey','quite pricey',
+               'good value','not worth','not value','prices are','pricing'],
+    antiSignals: [],
+    minScore: 1
+  },
+  {
+    key: 'hygiene', name: 'Cleanliness', icon: '🧹',
+    patterns: ['clean','dirty','hygiene','hygienic','unhygienic','mess','messy',
+               'washroom','toilet','bathroom','odor','odour','stain','dusty',
+               'well maintained','not maintained','tidy','untidy','smells',
+               'cockroach','pest','insects','garbage','waste'],
+    antiSignals: [],
+    minScore: 1
+  },
+  {
+    key: 'wifi', name: 'WiFi & Workspace', icon: '📶',
+    // ONLY specific wifi/workspace signals — removed bare "work", "study",
+    // "internet", "connection", "plug", "socket" that cross-contaminate staff reviews
+    patterns: ['wifi','wi-fi','internet speed','internet connection','internet here',
+               'laptop','charging point','plug point','work from cafe','work from here',
+               'working from','work remotely','remote work','coworking',
+               'study here','study cafe','work on laptop','bring my laptop',
+               'socket available','power socket'],
+    // Hard veto: if the review is clearly about a person doing their job,
+    // "work" has nothing to do with workspace/wifi
+    antiSignals: ['takes his work','takes her work','takes their work',
+                  'does his job','does her job','his work seriously','her work seriously',
+                  'good employee','great employee','the employee','the staff member'],
+    minScore: 1
+  },
 ];
+
+// ── Core matcher: phrase-aware, boundary-safe, anti-signal vetoed ──────────
+function _matchesTheme(text, theme) {
+  // Step 1: check anti-signals — any match = hard reject
+  for (const anti of (theme.antiSignals || [])) {
+    // phrase: all words must appear (order-insensitive) and signal word boundary
+    const antiWords = anti.split(/\s+/);
+    if (antiWords.every(w => new RegExp('\\b' + w + '\\b', 'i').test(text))) return false;
+  }
+
+  // Step 2: score patterns
+  let score = 0;
+  for (const pattern of theme.patterns) {
+    const words = pattern.split(/\s+/);
+    if (words.length === 1) {
+      // Single word — strict word boundary (won't match substrings)
+      if (new RegExp('\\b' + words[0] + '\\b', 'i').test(text)) score += 1;
+    } else {
+      // Multi-word phrase — all words must appear with word boundaries
+      if (words.every(w => new RegExp('\\b' + w + '\\b', 'i').test(text))) score += 2;
+    }
+  }
+
+  return score >= (theme.minScore || 1);
+}
 
 function _analyseThemes(reviews) {
   return INTEL_THEMES.map(th => {
     let total = 0, pos = 0, neg = 0;
     reviews.forEach(r => {
-      const text = (r.text || '').toLowerCase();
-      if (!th.keys.some(k => text.includes(k))) return;
+      const text = r.text || '';
+      if (!_matchesTheme(text, th)) return;
       total++;
       const rating = Number(r.rating);
       if (rating >= 4) pos++;
@@ -2675,14 +2788,14 @@ function _buildActionCards(reviews, themes) {
         cls:'urgent', icon:th.icon,
         title: `${th.name}: ${negPct}% of mentions are negative`,
         detail:`${th.neg} out of ${th.total} reviews mentioning "${th.name.toLowerCase()}" are 1–2★. This is a recurring complaint that needs a fix — not just a reply.`,
-        cta:`Search "${th.keys[0]}"`, ctaFn:`switchPanel('reviews');setTimeout(()=>{$('#searchInput').value='${th.keys[0]}';state.search='${th.keys[0]}';applyFilters();},120)`
+        cta:`View reviews`, ctaFn:`filterByTheme('${th.key}')`
       });
     } else if (negPct >= 28) {
       cards.push({
         cls:'high', icon:th.icon,
         title: `Watch: ${th.name} getting mixed feedback`,
         detail:`${th.neg} negative vs ${th.pos} positive mentions. ${negPct}% negative — worth monitoring and addressing proactively.`,
-        cta:`Investigate`, ctaFn:`switchPanel('reviews');setTimeout(()=>{$('#searchInput').value='${th.keys[0]}';state.search='${th.keys[0]}';applyFilters();},120)`
+        cta:`Investigate`, ctaFn:`filterByTheme('${th.key}')`
       });
     }
   });
