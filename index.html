@@ -1620,6 +1620,9 @@ async function loadAll() {
       saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
       await applyFiltersProgressive();
       updateBadge();
+      // Re-render whichever analytics panel is open so it shows fresh data
+      if (state.panel === 'dashboard')    renderDashboardPanel();
+      if (state.panel === 'intelligence') renderIntelligencePanel();
     } else if (!cache) {
       toast((revRes && revRes._err && revRes._err.message) || 'Failed to load reviews', 'err');
     }
@@ -2210,7 +2213,7 @@ function switchPanel(name) {
   // Render on demand
   try { (PANEL_RENDERERS[name] || (()=>{}))(); } catch (e) { console.error(e); }
   // Scroll top for the new panel
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo(0, 0);
 }
 
 document.querySelectorAll('.nav-item').forEach(el => {
@@ -2231,14 +2234,15 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // ═══════════════════════════════════════════════════════
 state.dashPeriod = 'month'; // default
 
-// Wire period buttons
-document.querySelectorAll('.dash-period-wrap .chip').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.dash-period-wrap .chip').forEach(b => b.classList.remove('on'));
-    btn.classList.add('on');
-    state.dashPeriod = btn.dataset.period;
-    renderDashboardPanel();
-  });
+// Period toggle — event delegation on the stable panel element so listeners
+// survive any innerHTML replacement inside the panel on re-renders.
+document.getElementById('panelDashboard').addEventListener('click', e => {
+  const btn = e.target.closest('[data-period]');
+  if (!btn) return;
+  document.querySelectorAll('.dash-period-wrap .chip').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  state.dashPeriod = btn.dataset.period;
+  renderDashboardPanel();
 });
 
 function _periodRange(period) {
@@ -2765,28 +2769,31 @@ const INTEL_THEMES = [
   },
 ];
 
-// ── Core matcher: phrase-aware, boundary-safe, anti-signal vetoed ──────────
-function _matchesTheme(text, theme) {
-  // Step 1: check anti-signals — any match = hard reject
-  for (const anti of (theme.antiSignals || [])) {
-    // phrase: all words must appear (order-insensitive) and signal word boundary
-    const antiWords = anti.split(/\s+/);
-    if (antiWords.every(w => new RegExp('\\b' + w + '\\b', 'i').test(text))) return false;
-  }
+// Pre-compile all pattern regexes once at startup.
+// Without this, every _analyseThemes call creates ~56k RegExp objects
+// (200 reviews × 7 themes × 20 patterns × 2 words) — the #1 cause of
+// intelligence panel and panel-switch lag.
+INTEL_THEMES.forEach(t => {
+  t._antiRx = (t.antiSignals || []).map(a =>
+    a.split(/\s+/).map(w => new RegExp('\\b' + w + '\\b', 'i'))
+  );
+  t._patRx = t.patterns.map(p =>
+    p.split(/\s+/).map(w => new RegExp('\\b' + w + '\\b', 'i'))
+  );
+});
 
-  // Step 2: score patterns
+function _matchesTheme(text, theme) {
+  for (const antiWords of (theme._antiRx || [])) {
+    if (antiWords.every(rx => rx.test(text))) return false;
+  }
   let score = 0;
-  for (const pattern of theme.patterns) {
-    const words = pattern.split(/\s+/);
-    if (words.length === 1) {
-      // Single word — strict word boundary (won't match substrings)
-      if (new RegExp('\\b' + words[0] + '\\b', 'i').test(text)) score += 1;
+  for (const patWords of (theme._patRx || [])) {
+    if (patWords.length === 1) {
+      if (patWords[0].test(text)) score += 1;
     } else {
-      // Multi-word phrase — all words must appear with word boundaries
-      if (words.every(w => new RegExp('\\b' + w + '\\b', 'i').test(text))) score += 2;
+      if (patWords.every(rx => rx.test(text))) score += 2;
     }
   }
-
   return score >= (theme.minScore || 1);
 }
 
@@ -3126,62 +3133,16 @@ $('#tplAddBtn').addEventListener('click', () => tplOpenEditor(null));
 // ═══════════════════════════════════════════════════════
 // PANEL RENDER MEMOIZATION  (C1 + C2)
 // ═══════════════════════════════════════════════════════
-// Problem: renderDashboardPanel() and renderIntelligencePanel() rebuild
-// all HTML from scratch on every panel tap, even when reviews haven't changed.
-// Fix: cache the last rendered HTML keyed to reviews array length + first id.
-// Cache hit → innerHTML swap in ~0 ms. Miss → rebuild + rAF so the panel
-// slide animation finishes before heavy JS starts.
-const _panelCache = {};
-let   _panelCacheKey = '';   // fingerprint of current reviews
-
-function _reviewsCacheKey() {
-  const r = state.reviews;
-  if (!r || !r.length) return 'empty';
-  // length + first + last id — cheap, catches additions and edits
-  return r.length + '|' + (r[0] && r[0].id) + '|' + (r[r.length-1] && r[r.length-1].id);
-}
-
-function _memoPanel(name, renderFn, containerSelector) {
-  const key = _reviewsCacheKey();
-  if (_panelCache[name] && _panelCache[name].key === key) {
-    // Cache hit — swap HTML instantly, no recompute
-    const el = $(containerSelector);
-    if (el) el.innerHTML = _panelCache[name].html;
-    return;
-  }
-  // Cache miss — defer render past the animation frame so the panel
-  // slide completes before we block the main thread (C2)
-  requestAnimationFrame(() => {
-    renderFn();
-    // Store what was rendered
-    const el = $(containerSelector);
-    if (el) _panelCache[name] = { key, html: el.innerHTML };
-  });
-}
-
-// Wrapped versions used by the panel switcher
+// Defer panel renders past the animation frame so the slide plays first,
+// then the render runs on an already-painted frame.
+// The old _memoPanel innerHTML-swap approach was killing event listeners
+// (period buttons, etc.) by replacing DOM nodes on every cache hit.
 function renderDashboardPanelMemo() {
-  _memoPanel('dashboard', renderDashboardPanel, '#panelDashboard .panel-scroll-body, #panelDashboard');
+  requestAnimationFrame(() => renderDashboardPanel());
 }
 function renderIntelligencePanelMemo() {
-  _memoPanel('intelligence', renderIntelligencePanel, '#panelIntelligence');
+  requestAnimationFrame(() => renderIntelligencePanel());
 }
-
-// Bust cache whenever reviews change so next render is fresh
-function _bustPanelCache() {
-  _panelCache.dashboard    = null;
-  _panelCache.intelligence = null;
-}
-
-// Re-render visible panel whenever reviews change
-// Bust panel cache first so stale HTML is never reused after a data change
-const _origApplyFilters = applyFilters;
-applyFilters = function() {
-  _bustPanelCache();
-  _origApplyFilters();
-  if (state.panel === 'dashboard')    renderDashboardPanel();
-  if (state.panel === 'intelligence') renderIntelligencePanel();
-};
 
 // ═══════════════════════════════════════════════════════
 // BOOT
