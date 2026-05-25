@@ -808,6 +808,22 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
 .tpl-actions .qbtn { padding:5px 12px; }
 .tpl-actions .qbtn.danger { color:var(--danger); border-color:rgba(198,40,40,.3); }
 
+/* ── content-visibility: auto ────────────────────────────────────────
+   Tells the browser to skip layout + paint for off-screen review cards.
+   With 200 cards in the DOM, only the ~8 visible ones are ever painted.
+   contain-intrinsic-size gives the browser an estimated height so the
+   scrollbar stays accurate before cards are rendered.
+   This is the single biggest scroll-performance win available in CSS. */
+.review {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 160px;
+  contain: layout style;
+}
+
+/* Mobile keyframes — opacity only, no translateY */
+@keyframes mobileReveal { from { opacity:0; } to { opacity:1; } }
+@keyframes mobileExit   { from { opacity:1; } to { opacity:0; } }
+
 /* Add bottom padding on mobile so bottom-nav doesn't cover content */
 @media (max-width:899px) {
   .app { padding-bottom:88px; }
@@ -849,10 +865,24 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
     -webkit-backdrop-filter: none !important;
   }
 
-  /* Tighten transition times — long transitions feel slow on low-FPS devices */
-  * { transition-duration: 0.15s !important; }
-  /* Exception: keep panel reveal animation at reasonable speed */
-  .panel.active { animation-duration: 0.25s !important; }
+  /* ── Remove transitions from review cards — even un-triggered transitions
+     force the browser to track paint layers for every card on scroll ── */
+  .review,
+  .glass.review {
+    transition: none !important;
+  }
+  /* No hover transform on touch devices — causes GPU layer promotion */
+  .review:hover {
+    transform: none !important;
+    box-shadow: var(--shadow) !important;
+  }
+
+  /* ── Panel switch: opacity-only on mobile ──────────────────────────
+     translateY on a panel container composites every child card as one
+     giant GPU texture — catastrophic with 200 review cards inside.
+     Opacity-only runs on the compositor thread with zero main-thread cost. */
+  .panel.active { animation: mobileReveal 0.18s ease forwards !important; }
+  .panel.exit   { animation: mobileExit  0.14s ease forwards !important; }
 }
 
 </style>
