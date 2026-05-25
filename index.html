@@ -729,6 +729,62 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
   align-items:center; margin-bottom:7px; font-size:.72rem; color:var(--text2); }
 .dist-row .star { color:#f0c040; }
 
+/* ── INTELLIGENCE PANEL ──────────────────────────── */
+.intel-summary {
+  padding:18px 16px; border-radius:18px; margin-bottom:14px;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+  font-size:.85rem; color:var(--text2); line-height:1.75; white-space:pre-wrap;
+  display:none;
+}
+.intel-summary.show { display:block; animation:panelReveal .4s ease; }
+.intel-summary strong { color:var(--text); font-weight:600; }
+.intel-summary .sum-head { font-family:'Space Mono',monospace; font-size:.55rem;
+  letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:10px; }
+
+.action-card {
+  padding:16px 14px; border-radius:16px; margin-bottom:10px;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-left-width:3px; transition:transform .2s ease;
+}
+.action-card:hover { transform:translateX(2px); }
+.action-card.urgent { border-left-color:var(--danger); }
+.action-card.high   { border-left-color:var(--warning); }
+.action-card.good   { border-left-color:var(--success); }
+.action-card.info   { border-left-color:var(--gold); }
+.action-head { display:flex; align-items:flex-start; gap:10px; margin-bottom:5px; }
+.action-ico  { font-size:1.1rem; line-height:1.3; flex-shrink:0; }
+.action-title { font-size:.85rem; font-weight:400; color:var(--text); line-height:1.3; }
+.action-detail { font-size:.76rem; color:var(--text2); line-height:1.55;
+  margin:4px 0 10px 0; padding-left:22px; }
+.action-cta { font-family:'Space Mono',monospace; font-size:.5rem; letter-spacing:2px;
+  text-transform:uppercase; padding:5px 12px; border-radius:60px;
+  background:transparent; border:1px solid var(--input-bdr); color:var(--text2);
+  cursor:pointer; margin-left:22px; transition:border-color .2s, color .2s; }
+.action-cta:hover { border-color:var(--gold); color:var(--gold); }
+
+.theme-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px; }
+@media (min-width:600px) { .theme-grid { grid-template-columns:repeat(3,1fr); } }
+.theme-card {
+  padding:14px 12px; border-radius:16px;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+}
+.theme-name { font-family:'Space Mono',monospace; font-size:.46rem; letter-spacing:2px;
+  text-transform:uppercase; color:var(--text3); margin-bottom:8px; }
+.theme-count { font-family:'Nunito Sans',sans-serif; font-weight:200; font-size:1.6rem;
+  color:var(--text); line-height:1; }
+.theme-unit { font-family:'Space Mono',monospace; font-size:.46rem; color:var(--text3);
+  margin-left:4px; }
+.theme-bars { display:flex; gap:4px; margin-top:10px; }
+.theme-pos-bar { height:4px; border-radius:2px; background:var(--success); transition:width .6s ease; }
+.theme-neg-bar { height:4px; border-radius:2px; background:var(--danger); transition:width .6s ease; }
+.theme-sentiment { display:flex; gap:10px; margin-top:6px;
+  font-family:'Space Mono',monospace; font-size:.46rem; letter-spacing:1px; }
+.theme-pos { color:var(--success); }
+.theme-neg { color:var(--danger); }
+
 /* KEYWORDS — tag cloud */
 .kw-cloud { display:flex; flex-wrap:wrap; gap:8px; padding:6px 2px; }
 .kw {
@@ -755,6 +811,7 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
 /* Add bottom padding on mobile so bottom-nav doesn't cover content */
 @media (max-width:899px) {
   .app { padding-bottom:88px; }
+  .analytics-grid { grid-template-columns:1fr !important; }
 }
 
 </style>
@@ -833,8 +890,7 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
       <nav class="glass side-nav" id="sideNav">
         <button class="nav-item active" data-panel="dashboard"><span class="nav-ico">◫</span><span>Dashboard</span></button>
         <button class="nav-item"        data-panel="reviews"  ><span class="nav-ico">☰</span><span>Reviews</span></button>
-        <button class="nav-item"        data-panel="analytics"><span class="nav-ico">▤</span><span>Analytics</span></button>
-        <button class="nav-item"        data-panel="keywords" ><span class="nav-ico">⌗</span><span>Keywords</span></button>
+        <button class="nav-item"        data-panel="intelligence"><span class="nav-ico">✦</span><span>Intelligence</span></button>
         <button class="nav-item"        data-panel="templates"><span class="nav-ico">✎</span><span>Templates</span></button>
         <div class="bio-prompt" id="bioPrompt">
           <div class="bio-prompt-text">
@@ -911,6 +967,43 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
           <!-- ④ Insight tiles -->
           <div class="insight-grid" id="dashInsights"></div>
 
+          <!-- Analytics merged into dashboard ──────── -->
+          <div class="section-label" style="margin-top:20px;">Deep analytics</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="analytics-grid">
+            <div class="glass chart-card">
+              <div class="chart-title">Volume by platform</div>
+              <div id="chartByPlatform"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Avg ★ by branch</div>
+              <div id="chartByBranchRating"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Volume by branch</div>
+              <div id="chartByBranch"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Rating distribution</div>
+              <div id="chartByRating"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Reply status</div>
+              <div id="chartByStatus"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Response rate by platform</div>
+              <div id="chartRespByPlat"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Reviews by day of week</div>
+              <div id="chartByDow"></div>
+            </div>
+            <div class="glass chart-card">
+              <div class="chart-title">Low ★ by platform</div>
+              <div id="chartLowByPlat"></div>
+            </div>
+          </div>
+
           <!-- hidden rstrip kept for renderRatings() compatibility -->
           <div style="display:none;" id="ratingsStrip">
             <div class="rcard google"><div class="rlabel">Google</div><div class="rvalue">—</div><div class="rcount">— reviews</div></div>
@@ -970,60 +1063,35 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
           <button class="load-more" id="loadMoreBtn" style="display:none;">Load more</button>
         </section>
 
-        <!-- ◉ ANALYTICS ─────────────────────────── -->
-        <section class="panel" id="panelAnalytics">
-          <div class="panel-head">
-            <div>
-              <div class="panel-sub">Insights</div>
-              <div class="panel-title">Analytics</div>
+        <!-- ◉ INTELLIGENCE ──────────────────────── -->
+        <section class="panel" id="panelIntelligence">
+          <div class="dash-sticky">
+            <div class="panel-head">
+              <div>
+                <div class="panel-sub">AI Analysis</div>
+                <div class="panel-title">Intelligence</div>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="chip" id="summaryWeekBtn">Week</button>
+                <button class="chip" id="summaryMonthBtn">Month</button>
+              </div>
             </div>
           </div>
 
-          <div class="glass chart-card">
-            <div class="chart-title">Volume by platform</div>
-            <div id="chartByPlatform"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Avg ★ rating by branch</div>
-            <div id="chartByBranchRating"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Volume by branch</div>
-            <div id="chartByBranch"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Rating distribution (1 – 5 ★)</div>
-            <div id="chartByRating"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Reply status</div>
-            <div id="chartByStatus"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Response rate by platform</div>
-            <div id="chartRespByPlat"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Reviews by day of week</div>
-            <div id="chartByDow"></div>
-          </div>
-          <div class="glass chart-card">
-            <div class="chart-title">Low ★ (1–2) by platform</div>
-            <div id="chartLowByPlat"></div>
-          </div>
-        </section>
+          <!-- Summary output -->
+          <div class="intel-summary" id="intelSummary"></div>
 
-        <!-- ◉ KEYWORDS ──────────────────────────── -->
-        <section class="panel" id="panelKeywords">
-          <div class="panel-head">
-            <div>
-              <div class="panel-sub">Common terms</div>
-              <div class="panel-title">Keywords</div>
-            </div>
-            <div class="panel-sub" id="kwCount">—</div>
-          </div>
+          <!-- Action cards -->
+          <div class="section-label">Suggested Actions</div>
+          <div id="intelActions"></div>
+
+          <!-- Recurring themes -->
+          <div class="section-label">Recurring Themes</div>
+          <div class="theme-grid" id="intelThemes"></div>
+
+          <!-- Top phrases -->
+          <div class="section-label">What customers keep saying</div>
           <div class="glass chart-card">
-            <div class="chart-title">Top mentions across all reviews</div>
             <div class="kw-cloud" id="kwCloud"></div>
           </div>
         </section>
@@ -1050,8 +1118,7 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
 <nav class="bottom-nav" id="bottomNav">
   <button class="nav-item active" data-panel="dashboard"><span class="nav-ico">◫</span><span>Home</span></button>
   <button class="nav-item"        data-panel="reviews"  ><span class="nav-ico">☰</span><span>Reviews</span></button>
-  <button class="nav-item"        data-panel="analytics"><span class="nav-ico">▤</span><span>Stats</span></button>
-  <button class="nav-item"        data-panel="keywords" ><span class="nav-ico">⌗</span><span>Words</span></button>
+  <button class="nav-item"        data-panel="intelligence"><span class="nav-ico">✦</span><span>Brain</span></button>
   <button class="nav-item"        data-panel="templates"><span class="nav-ico">✎</span><span>Reply</span></button>
 </nav>
 
@@ -1402,62 +1469,94 @@ $('#bioEnableBtn').addEventListener('click', enrollBiometric);
 $('#bioDismissBtn').addEventListener('click', () => $('#bioPrompt').classList.remove('show'));
 
 // ═══════════════════════════════════════════════════════
-// LOAD DATA  (cache-first + background revalidate)
+// LOAD DATA — instant cache, progressive stream
 // ═══════════════════════════════════════════════════════
 async function loadAll() {
-  renderSkeleton();
-  showLoadHint('Connecting…');
-
-  // 1. Serve cache instantly while we revalidate
+  // ── Step 1: Show cache INSTANTLY (feels instant) ─────
   const cache = loadReviewsCache();
-  if (cache) {
+  if (cache && cache.reviews && cache.reviews.length) {
     state.reviews = cache.reviews;
     state.ratings = cache.ratings;
-    applyFilters();
+    applyFilters();           // renders first 10 from cache right away
     renderRatings();
-    showLoadHint('Refreshing in background…');
+    showLoadHint('↻ Refreshing…');
+  } else {
+    renderSkeleton();         // only show skeletons if truly no cache
+    showLoadHint('Connecting to Heebee servers…');
   }
 
-  // 2. SEQUENTIAL — ratings first (warms GAS-side CacheService),
-  //    then reviews (reads from now-warm cache — fast).
-  //    Doing both in Promise.all causes a race: both hit fetchAllReviews()
-  //    simultaneously before cache is populated, so the reviews call
-  //    times out while ratings wins the race.
+  // ── Step 2: Ratings (warms GAS CacheService) ─────────
   try {
-    showLoadHint('Fetching ratings…');
-    const ratRes = await api('fetchRatings', { branch: 'all' });
+    const ratRes = await api('fetchRatings', { branch: 'all' }, 60000);
     if (ratRes.ok) {
       state.ratings = ratRes.ratings;
       renderRatings();
-      saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
     }
-  } catch (e) {
-    // ratings fail is non-fatal — keep going
-  }
+  } catch (_) {}            // non-fatal
 
+  // ── Step 3: Full reviews — progressive render ─────────
   try {
-    const hint = state.reviews.length
-      ? 'Refreshing ' + state.reviews.length + '+ reviews…'
-      : 'Loading reviews… (first load takes ~30 s)';
-    showLoadHint(hint);
-    const revRes = await api('fetchReviews');
+    showLoadHint(state.reviews.length ? '↻ Loading latest reviews…' : 'Loading reviews… (first load ~30s on cold start)');
+    const revRes = await api('fetchReviews', {}, 180000);
     if (revRes.ok) {
       state.reviews = revRes.reviews || [];
       saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
-      applyFilters();
+      await applyFiltersProgressive();   // stream first 5 instantly, rest in background
       updateBadge();
-    } else {
-      if (!cache) toast(revRes.error || 'Failed to load reviews', 'err');
+    } else if (!cache) {
+      toast(revRes.error || 'Failed to load', 'err');
     }
   } catch (e) {
-    if (!cache) toast(e.message || 'Network error — check connection', 'err');
-    else toast('Background refresh failed — showing cached data', '');
+    if (!cache) toast('Could not connect — check internet', 'err');
+    else showLoadHint('Showing cached data');
   }
 
   hideLoadHint();
 
-  // 3. Templates in background (non-blocking)
+  // ── Step 4: Templates + Intelligence (background) ─────
   api('fetchTemplates').then(r => { if (r.ok) state.templates = r.templates || []; }).catch(() => {});
+}
+
+// Progressive render: show 5 instantly, stream rest frame-by-frame
+async function applyFiltersProgressive() {
+  let list = state.reviews.slice();
+  if (state.tab === 'unread')  list = list.filter(r => !r.read);
+  if (state.tab === 'low')     list = list.filter(r => Number(r.rating) <= 2);
+  if (state.tab === 'pending') list = list.filter(r => r.status === 'pending' || r.status === 'unread' || !r.status);
+  if (state.platform !== 'all') list = list.filter(r => r.platform === state.platform);
+  if (state.branch !== 'all')   list = list.filter(r => r.branch === state.branch);
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    list = list.filter(r =>
+      (r.reviewer||'').toLowerCase().includes(q) ||
+      (r.text||'').toLowerCase().includes(q) ||
+      (r.note||'').toLowerCase().includes(q));
+  }
+  state.filtered = list;
+  state.rendered = 0;
+
+  const el = $('#reviewsList');
+  el.innerHTML = '';
+
+  if (!list.length) {
+    el.innerHTML = `<div class="glass empty"><span class="empty-icon">◇</span><div class="empty-title">No reviews match</div><div class="empty-msg">Adjust filters or check back later.</div></div>`;
+    $('#loadMoreBtn').style.display = 'none';
+    return;
+  }
+
+  // Render first 5 synchronously — appears instantly
+  const first = list.slice(0, 5);
+  el.insertAdjacentHTML('beforeend', first.map(r => reviewCardHtml(r)).join(''));
+  state.rendered = first.length;
+
+  // Stream the rest in 20-item chunks without blocking paint
+  for (let i = 5; i < list.length; i += 20) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    el.insertAdjacentHTML('beforeend', list.slice(i, i + 20).map(r => reviewCardHtml(r)).join(''));
+    state.rendered = Math.min(i + 20, list.length);
+  }
+
+  $('#loadMoreBtn').style.display = 'none'; // all streamed — no load-more needed
 }
 
 function showLoadHint(msg) {
@@ -1956,17 +2055,17 @@ if ('serviceWorker' in navigator) {
 // ═══════════════════════════════════════════════════════
 state.panel = 'dashboard';
 const PANEL_RENDERERS = {
-  dashboard: renderDashboardPanel,
-  reviews:   () => {},                 // already live-rendered
-  analytics: renderAnalyticsPanel,
-  keywords:  renderKeywordsPanel,
-  templates: renderTemplatesPanel
+  dashboard:    renderDashboardPanel,
+  reviews:      () => {},
+  intelligence: renderIntelligencePanel,
+  templates:    renderTemplatesPanel
 };
 
 function switchPanel(name) {
   if (!name || name === state.panel) return;
   const current = document.querySelector('.panel.active');
-  const next    = document.getElementById('panel' + name.charAt(0).toUpperCase() + name.slice(1));
+  const idMap = { dashboard:'panelDashboard', reviews:'panelReviews', intelligence:'panelIntelligence', templates:'panelTemplates' };
+  const next    = document.getElementById(idMap[name] || ('panel' + name.charAt(0).toUpperCase() + name.slice(1)));
   if (!next) return;
   if (current) {
     current.classList.remove('active');
@@ -2398,6 +2497,257 @@ window.kwSearch = function(word) {
 };
 
 // ═══════════════════════════════════════════════════════
+// INTELLIGENCE PANEL — Client-side NLP engine
+// ═══════════════════════════════════════════════════════
+
+const INTEL_THEMES = [
+  { key:'coffee',   name:'Coffee Quality',    icon:'☕',
+    keys:['coffee','espresso','latte','cappuccino','americano','brew','beans','roast','cold brew','macchiato','mocha','chai','cortado'] },
+  { key:'food',     name:'Food & Menu',        icon:'🥐',
+    keys:['food','sandwich','cake','pastry','snack','meal','breakfast','dessert','waffle','toast','bagel','muffin','croissant','salad','wrap','bite'] },
+  { key:'staff',    name:'Staff & Service',    icon:'🤝',
+    keys:['staff','service','friendly','rude','helpful','attentive','polite','waiter','barista','team','crew','manager','owner','behavior','behaviour'] },
+  { key:'ambience', name:'Ambience',           icon:'🏡',
+    keys:['ambience','atmosphere','vibe','decor','music','seating','comfortable','crowded','cozy','cosy','place','space','interior','aesthetic','lighting'] },
+  { key:'wait',     name:'Wait Time',          icon:'⏱',
+    keys:['wait','waiting','delay','queue','quick','fast','slow','forever','prompt','speedy','rush','hurry','minutes','hour','late'] },
+  { key:'price',    name:'Pricing & Value',    icon:'💰',
+    keys:['price','expensive','cheap','value','worth','overpriced','cost','money','bill','affordable','reasonable','pricey','pocket','budget'] },
+  { key:'hygiene',  name:'Cleanliness',        icon:'🧹',
+    keys:['clean','dirty','hygiene','mess','washroom','toilet','bathroom','smell','stain','tidy','maintained','dusty','odor','odour'] },
+  { key:'wifi',     name:'WiFi & Workspace',   icon:'📶',
+    keys:['wifi','internet','work','laptop','socket','plug','connection','charging','study','outlet'] },
+];
+
+function _analyseThemes(reviews) {
+  return INTEL_THEMES.map(th => {
+    let total = 0, pos = 0, neg = 0;
+    reviews.forEach(r => {
+      const text = (r.text || '').toLowerCase();
+      if (!th.keys.some(k => text.includes(k))) return;
+      total++;
+      const rating = Number(r.rating);
+      if (rating >= 4) pos++;
+      else if (rating <= 2) neg++;
+    });
+    return { ...th, total, pos, neg, neutral: total - pos - neg };
+  }).filter(t => t.total > 0).sort((a, b) => b.total - a.total);
+}
+
+function _buildActionCards(reviews, themes) {
+  const cards = [];
+
+  // 1. Unreplied low-★ reviews — always show first if any
+  const unrepLow = reviews.filter(r => Number(r.rating) <= 2 && r.status !== 'replied');
+  if (unrepLow.length > 0) {
+    cards.push({
+      cls:'urgent', icon:'🔴',
+      title: `${unrepLow.length} low-star review${unrepLow.length > 1 ? 's' : ''} still unreplied`,
+      detail: `${unrepLow.length === 1 ? 'A 1–2★ review is' : unrepLow.length + ' reviews (1–2★) are'} waiting for a response. Every unanswered negative review costs you visibility and trust.`,
+      cta:'View low ★', ctaFn:`switchPanel('reviews');setTimeout(()=>{document.querySelector('[data-tab="low"]') && document.querySelector('[data-tab="low"]').click()},120)`
+    });
+  }
+
+  // 2. Recent spike (last 7 days)
+  const now7 = Date.now();
+  const last7 = reviews.filter(r => { const t=_reviewTimestamp(r); return t && (now7-t) < 7*86400000; });
+  const last7Low = last7.filter(r => Number(r.rating) <= 2).length;
+  if (last7.length >= 5 && last7Low / last7.length > 0.35) {
+    cards.push({
+      cls:'urgent', icon:'📉',
+      title: `Low-star spike this week: ${last7Low} of ${last7.length} (${Math.round(last7Low/last7.length*100)}%)`,
+      detail:`More than a third of this week's reviews are 1–2★. Something may have gone wrong recently — check all branches today.`,
+      cta:'This week', ctaFn:`switchPanel('reviews')`
+    });
+  }
+
+  // 3. Theme-based: high negative rate
+  themes.forEach(th => {
+    if (th.total < 3) return;
+    const negPct = Math.round(th.neg / th.total * 100);
+    if (negPct >= 40) {
+      cards.push({
+        cls:'urgent', icon:th.icon,
+        title: `${th.name}: ${negPct}% of mentions are negative`,
+        detail:`${th.neg} out of ${th.total} reviews mentioning "${th.name.toLowerCase()}" are 1–2★. This is a recurring complaint that needs a fix — not just a reply.`,
+        cta:`Search "${th.keys[0]}"`, ctaFn:`switchPanel('reviews');setTimeout(()=>{$('#searchInput').value='${th.keys[0]}';state.search='${th.keys[0]}';applyFilters();},120)`
+      });
+    } else if (negPct >= 28) {
+      cards.push({
+        cls:'high', icon:th.icon,
+        title: `Watch: ${th.name} getting mixed feedback`,
+        detail:`${th.neg} negative vs ${th.pos} positive mentions. ${negPct}% negative — worth monitoring and addressing proactively.`,
+        cta:`Investigate`, ctaFn:`switchPanel('reviews');setTimeout(()=>{$('#searchInput').value='${th.keys[0]}';state.search='${th.keys[0]}';applyFilters();},120)`
+      });
+    }
+  });
+
+  // 4. Response rate warning
+  const replied = reviews.filter(r => r.status === 'replied').length;
+  const respRate = reviews.length ? Math.round(replied / reviews.length * 100) : 100;
+  if (reviews.length >= 5 && respRate < 40) {
+    cards.push({
+      cls:'high', icon:'📬',
+      title: `Response rate critically low: ${respRate}%`,
+      detail:`Only ${replied} of ${reviews.length} reviews have a reply. Platforms like Google actively rank businesses higher when they respond promptly.`,
+      cta:'Reply queue', ctaFn:`switchPanel('reviews')`
+    });
+  } else if (reviews.length >= 5 && respRate < 65) {
+    cards.push({
+      cls:'high', icon:'📬',
+      title: `Response rate needs work: ${respRate}%`,
+      detail:`${reviews.length - replied} reviews still need a reply. Aim for 80%+ to build customer trust and improve ranking.`,
+      cta:'Reply queue', ctaFn:`switchPanel('reviews')`
+    });
+  }
+
+  // 5. Highlight a clear strength
+  const bestTheme = [...themes].filter(t => t.total >= 3).sort((a,b)=>(b.pos/b.total)-(a.pos/a.total))[0];
+  if (bestTheme && (bestTheme.pos / bestTheme.total) >= 0.72) {
+    cards.push({
+      cls:'good', icon:bestTheme.icon,
+      title:`${bestTheme.name} is your strongest point`,
+      detail:`${bestTheme.pos} of ${bestTheme.total} mentions are positive (${Math.round(bestTheme.pos/bestTheme.total*100)}%). Amplify this in your marketing, train other branches on it, and reply thanking customers for noticing.`,
+      cta:null
+    });
+  }
+
+  // 6. Healthy state — no issues
+  if (!cards.some(c => c.cls === 'urgent' || c.cls === 'high')) {
+    cards.push({
+      cls:'good', icon:'✦',
+      title:'Everything looks healthy right now',
+      detail:'No major red flags in the current review data. Maintain response discipline and keep watching for emerging patterns.',
+      cta:null
+    });
+  }
+  return cards;
+}
+
+function _intelSummaryText(reviews, periodLabel) {
+  if (!reviews.length) return `No reviews found for ${periodLabel}.`;
+  const avg = (reviews.reduce((s,r) => s+Number(r.rating),0)/reviews.length).toFixed(2);
+  const fiveStar = reviews.filter(r=>Number(r.rating)===5).length;
+  const oneTwo   = reviews.filter(r=>Number(r.rating)<=2).length;
+  const replied  = reviews.filter(r=>r.status==='replied').length;
+  const respRate = Math.round(replied/reviews.length*100);
+  const themes   = _analyseThemes(reviews);
+  const topTheme = themes[0];
+  const worstTheme = [...themes].filter(t=>t.total>=3).sort((a,b)=>(b.neg/b.total)-(a.neg/a.total))[0];
+  const branchLines = ['b1','b2','b3'].map(b=>{
+    const br=reviews.filter(r=>r.branch===b);
+    if(!br.length) return null;
+    const bavg=(br.reduce((s,r)=>s+Number(r.rating),0)/br.length).toFixed(1);
+    return `${branchName(b)}: ${bavg}★ (${br.length})`;
+  }).filter(Boolean);
+
+  let lines = [
+    `📊 <span class="sum-head">${periodLabel} Summary</span>`,
+    ``,
+    `<strong>${reviews.length} reviews</strong> · avg <strong>${avg}★</strong> · <strong>${fiveStar}</strong> five-star · <strong>${oneTwo}</strong> low-star (1–2★)`,
+    `Response rate: <strong>${respRate}%</strong> — ${replied} of ${reviews.length} replied`
+  ];
+  if (topTheme) {
+    const sent = topTheme.pos > topTheme.neg ? 'mostly positive' : topTheme.neg > topTheme.pos ? 'mixed with concerns' : 'neutral';
+    lines.push(``, `<strong>Most discussed:</strong> ${topTheme.icon} ${topTheme.name} — ${topTheme.total} mentions, ${sent}`);
+  }
+  if (worstTheme && worstTheme.neg > 1) {
+    const negPct = Math.round(worstTheme.neg/worstTheme.total*100);
+    lines.push(`<strong>Needs focus:</strong> ${worstTheme.icon} ${worstTheme.name} — ${negPct}% negative (${worstTheme.neg}/${worstTheme.total})`);
+  }
+  if (respRate < 60) {
+    lines.push(``, `⚠️ Response rate of <strong>${respRate}%</strong> is below target. Aim for 80%+ to stay competitive on Google and Zomato.`);
+  } else if (respRate >= 80) {
+    lines.push(``, `✅ Response discipline is strong at <strong>${respRate}%</strong> — this helps rankings.`);
+  }
+  if (branchLines.length) lines.push(``, `<strong>By branch:</strong> ${branchLines.join(' · ')}`);
+  return lines.join('\n');
+}
+
+let _intelSummaryMode = null;
+
+function _showIntelSummary(period) {
+  _intelSummaryMode = period;
+  ['Week','Month'].forEach(p => {
+    const btn = document.getElementById('summary'+p+'Btn');
+    if (btn) btn.classList.toggle('on', p.toLowerCase() === period);
+  });
+  const now = Date.now();
+  const cutoff = period === 'week' ? 7*86400000 : 30*86400000;
+  const slice = (state.reviews||[]).filter(r => { const t=_reviewTimestamp(r); return t && (now-t)<=cutoff; });
+  const label = period === 'week' ? 'Last 7 Days' : 'Last 30 Days';
+  const el = document.getElementById('intelSummary');
+  el.innerHTML = _intelSummaryText(slice, label);
+  el.classList.add('show');
+}
+
+function _renderKwCloud(reviews) {
+  const freq = {};
+  reviews.forEach(r => {
+    (String(r.text||'').toLowerCase().match(/[a-z][a-z']{2,}/g)||[]).forEach(w => {
+      if (STOPWORDS.has(w) || w.length < 4) return;
+      freq[w] = (freq[w]||0) + 1;
+    });
+  });
+  const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,80);
+  const max = top.length ? top[0][1] : 1;
+  $('#kwCloud').innerHTML = top.map(([w,c]) => {
+    const scale = (0.75 + (c/max)*0.8).toFixed(2);
+    return `<span class="kw" style="font-size:${scale}rem" onclick="kwSearch('${esc(w)}')">${esc(w)}<span class="kw-c">${c}</span></span>`;
+  }).join('') || '<div style="font-size:.75rem;color:var(--text3);padding:8px;">No reviews to analyse yet.</div>';
+}
+
+function renderIntelligencePanel() {
+  const reviews = state.reviews || [];
+
+  // ── Action cards ─────────────────────────────────────
+  const themes = _analyseThemes(reviews);
+  const cards  = _buildActionCards(reviews, themes);
+  $('#intelActions').innerHTML = cards.map(c => `
+    <div class="action-card ${c.cls}">
+      <div class="action-head">
+        <div class="action-ico">${c.icon}</div>
+        <div class="action-title">${esc(c.title)}</div>
+      </div>
+      <div class="action-detail">${esc(c.detail)}</div>
+      ${c.cta ? `<button class="action-cta" onclick="${c.ctaFn}">${esc(c.cta)} →</button>` : ''}
+    </div>`).join('') ||
+    '<div class="action-card info"><div class="action-head"><div class="action-ico">✦</div><div class="action-title">No reviews to analyse yet.</div></div></div>';
+
+  // ── Recurring theme cards ─────────────────────────────
+  $('#intelThemes').innerHTML = themes.length
+    ? themes.slice(0,8).map(th => {
+        const tot = Math.max(1, th.pos + th.neg);
+        const posPct = Math.round(th.pos/tot*100);
+        return `
+          <div class="theme-card" style="cursor:pointer;" onclick="switchPanel('reviews');setTimeout(()=>{$('#searchInput').value='${th.keys[0]}';state.search='${th.keys[0]}';applyFilters();},120)">
+            <div class="theme-name">${th.icon} ${esc(th.name)}</div>
+            <div><span class="theme-count">${th.total}</span><span class="theme-unit"> mentions</span></div>
+            <div class="theme-bars" style="margin-top:10px;">
+              <div class="theme-pos-bar" style="flex:${th.pos};min-width:${th.pos?2:0}px"></div>
+              <div class="theme-neg-bar" style="flex:${th.neg};min-width:${th.neg?2:0}px"></div>
+            </div>
+            <div class="theme-sentiment">
+              <span class="theme-pos">+${th.pos}</span>
+              <span class="theme-neg">−${th.neg}</span>
+              ${th.neutral?`<span style="color:var(--text3)">·${th.neutral}</span>`:''}
+            </div>
+          </div>`;
+      }).join('')
+    : '<div style="color:var(--text3);font-size:.8rem;padding:8px 0;">Not enough review data yet for theme detection.</div>';
+
+  // ── Keyword cloud ─────────────────────────────────────
+  _renderKwCloud(reviews);
+
+  // ── Wire summary buttons ──────────────────────────────
+  const wBtn = document.getElementById('summaryWeekBtn');
+  const mBtn = document.getElementById('summaryMonthBtn');
+  if (wBtn) wBtn.onclick = () => _showIntelSummary('week');
+  if (mBtn) mBtn.onclick = () => _showIntelSummary('month');
+  if (_intelSummaryMode) _showIntelSummary(_intelSummaryMode);
+}
+
+// ═══════════════════════════════════════════════════════
 // TEMPLATES PANEL — list + add/edit/delete
 // ═══════════════════════════════════════════════════════
 function renderTemplatesPanel() {
@@ -2509,9 +2859,8 @@ const _origApplyFilters = applyFilters;
 applyFilters = function() {
   _origApplyFilters();
   // Re-render visible side panels with fresh data
-  if (state.panel === 'dashboard') renderDashboardPanel();
-  if (state.panel === 'analytics') renderAnalyticsPanel();
-  if (state.panel === 'keywords')  renderKeywordsPanel();
+  if (state.panel === 'dashboard')    renderDashboardPanel();
+  if (state.panel === 'intelligence') renderIntelligencePanel();
 };
 
 // ═══════════════════════════════════════════════════════
