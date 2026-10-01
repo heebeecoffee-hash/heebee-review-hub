@@ -1018,17 +1018,20 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
           <div class="dash-sticky">
             <div class="panel-head">
               <div>
-                <div class="panel-sub">Overview</div>
+                <div class="panel-sub" id="dashSyncLine">Overview</div>
                 <div class="panel-title">Dashboard</div>
               </div>
               <!-- Period selector -->
               <div class="dash-period-wrap">
-                <button class="chip" data-period="week">Week</button>
-                <button class="chip on" data-period="month">Month</button>
-                <button class="chip" data-period="ytd">YTD</button>
+                <button class="chip" data-period="today">Today</button>
+                <button class="chip" data-period="week">7 Days</button>
+                <button class="chip on" data-period="window" id="windowChip">15 Days</button>
               </div>
             </div>
           </div>
+
+          <!-- Source health — shown only when a source (Google / form / sheet) fails -->
+          <div class="glass" id="sourceAlert" style="display:none;padding:14px 18px;margin-bottom:14px;border-left:3px solid #FF3B30;font-size:.8rem;line-height:1.6"></div>
 
           <!-- ① Platform health — 4 cards with ▲▼ vs period -->
           <div class="plat-health-grid" id="platHealthGrid"></div>
@@ -1178,7 +1181,7 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
               </div>
               <div style="display:flex;gap:6px;">
                 <button class="chip" id="summaryWeekBtn">Week</button>
-                <button class="chip" id="summaryMonthBtn">Month</button>
+                <button class="chip" id="summaryMonthBtn">15 Days</button>
               </div>
             </div>
           </div>
@@ -1250,7 +1253,8 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxUjEAzkm2rlLBabsYAMR3E
 const SESSION_KEY = 'heebee_rh_session_v1';
 const THEME_KEY   = 'heebee_rh_theme';
 const BIO_KEY     = 'heebee_rh_bio_credential';
-const REVIEWS_CACHE_KEY = 'heebee_rh_reviews_cache_v1';
+const REVIEWS_CACHE_KEY = 'heebee_rh_reviews_cache_v2';
+try { localStorage.removeItem('heebee_rh_reviews_cache_v1'); } catch {} // old 2-year cache
 const REVIEWS_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 const QUEUE_KEY = 'heebee_rh_queue_v1';
 const PAGE_SIZE = 10;
@@ -1579,12 +1583,51 @@ $('#bioDismissBtn').addEventListener('click', () => $('#bioPrompt').classList.re
 // ═══════════════════════════════════════════════════════
 // LOAD DATA — instant cache, progressive stream
 // ═══════════════════════════════════════════════════════
-async function loadAll() {
+// Feed metadata from the server: window size, last build time, per-source health
+function feedMeta(res) {
+  return { sources: res.sources || {}, windowDays: res.windowDays || 15, builtAt: res.builtAt || Date.now() };
+}
+
+function applyFeedMeta(res) {
+  const m = feedMeta(res);
+  state.windowDays = m.windowDays;
+  state.builtAt = m.builtAt;
+  const chip = $('#windowChip');
+  if (chip) chip.textContent = m.windowDays + ' Days';
+  const mBtn = $('#summaryMonthBtn');
+  if (mBtn) mBtn.textContent = m.windowDays + ' Days';
+  updateSyncLine();
+
+  const names = { google: 'Google', form: 'QR feedback form', sheet: 'Zomato / Swiggy sheet' };
+  const problems = Object.keys(m.sources)
+    .filter(k => !m.sources[k].ok)
+    .map(k => (names[k] || k) + ': ' + (m.sources[k].error || 'failed'));
+  showSourceAlert(problems);
+}
+
+function showSourceAlert(problems) {
+  const el = $('#sourceAlert');
+  if (!el) return;
+  if (!problems.length) { el.style.display = 'none'; return; }
+  el.innerHTML = '<strong>⚠️ Some reviews are missing</strong><br>' + problems.map(esc).join('<br>');
+  el.style.display = 'block';
+}
+
+function updateSyncLine() {
+  const el = $('#dashSyncLine');
+  if (!el || !state.builtAt) return;
+  const mins = Math.max(0, Math.round((Date.now() - state.builtAt) / 60000));
+  el.textContent = 'Last ' + (state.windowDays || 15) + ' days · synced ' + (mins < 1 ? 'just now' : mins + ' min ago');
+}
+setInterval(updateSyncLine, 60000);
+
+async function loadAll(opts) {
   // ── Step 1: Show cache INSTANTLY (feels instant) ─────
   const cache = loadReviewsCache();
   if (cache && cache.reviews && cache.reviews.length) {
     state.reviews = cache.reviews;
     state.ratings = cache.ratings;
+    if (cache.meta) applyFeedMeta(cache.meta);
     applyFilters();           // renders first 10 from cache right away
     renderRatings();
     showLoadHint('↻ Refreshing…');
@@ -1593,38 +1636,30 @@ async function loadAll() {
     showLoadHint('Connecting to Heebee servers…');
   }
 
-  // ── Wait for GAS to warm before firing real requests ────
-  // Ping was fired at page-load (boot). Awaiting it here ensures the GAS
-  // runtime is already hot when the data requests land — drops response
-  // time from 20s (cold) to ~1-2s (warm). 25s timeout guards against hangs.
-  await Promise.race([
-    window._gasWarm || Promise.resolve(),
-    new Promise(r => setTimeout(r, 25000))
-  ]);
+  // The server keeps a pre-built feed in cache (keepAliveJob, every 5 min),
+  // so the request goes out immediately — no warm-up ping to wait for.
 
-  // ── Steps 2+3: Ratings + Reviews IN PARALLEL (D1) ───────
+  // ── Step 2: one call returns reviews + ratings + source health ───
   showLoadHint(state.reviews.length ? '↻ Loading latest reviews…' : 'Loading reviews…');
   try {
-    const [ratRes, revRes] = await Promise.all([
-      api('fetchRatings', { branch: 'all' }, 60000).catch(() => ({ ok: false })),
-      api('fetchReviews', {}, 180000).catch(e => ({ ok: false, _err: e }))
-    ]);
-
-    if (ratRes.ok) {
-      state.ratings = ratRes.ratings;
-      renderRatings();
-    }
+    const revRes = await api(opts && opts.force ? 'refreshReviews' : 'fetchReviews', {}, 120000)
+      .catch(e => ({ ok: false, _err: e }));
 
     if (revRes.ok) {
       state.reviews = revRes.reviews || [];
-      saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, at: Date.now() });
+      state.ratings = revRes.ratings || null;
+      applyFeedMeta(revRes);
+      renderRatings();
+      saveReviewsCache({ reviews: state.reviews, ratings: state.ratings, meta: feedMeta(revRes), at: Date.now() });
       await applyFiltersProgressive();
       updateBadge();
       // Re-render whichever analytics panel is open so it shows fresh data
       if (state.panel === 'dashboard')    renderDashboardPanel();
       if (state.panel === 'intelligence') renderIntelligencePanel();
-    } else if (!cache) {
-      toast((revRes && revRes._err && revRes._err.message) || 'Failed to load reviews', 'err');
+    } else {
+      const msg = (revRes && (revRes.error || (revRes._err && revRes._err.message))) || 'Failed to load reviews';
+      showSourceAlert(['Could not load reviews: ' + msg]);
+      if (!cache) toast(msg, 'err');
     }
   } catch (e) {
     if (!cache) toast('Could not connect — check internet', 'err');
@@ -2058,9 +2093,8 @@ async function postReply(id, isGoogle) {
   toast(isGoogle ? 'Posting to Google…' : 'Saving reply…');
   try {
     if (isGoogle) {
-      const res = await api('postGoogleReply', { reviewId: id, replyText: text });
+      const res = await api('postGoogleReply', { reviewId: id, replyText: text, branch: r.branch, ref: r.ref });
       if (!res.ok) throw new Error(res.error);
-      await api('updateReview', { id, updates: { replyText: text, status: 'replied' } });
     } else {
       const res = await api('updateReview', { id, updates: { replyText: text, status: 'replied' } });
       if (!res.ok) throw new Error(res.error);
@@ -2073,7 +2107,7 @@ async function postReply(id, isGoogle) {
     applyFilters();
     if (!state.online) {
       enqueue(isGoogle ? 'postGoogleReply' : 'updateReview',
-        isGoogle ? { reviewId: id, replyText: text } : { id, updates: { replyText: text, status: 'replied' } });
+        isGoogle ? { reviewId: id, replyText: text, branch: r.branch, ref: r.ref } : { id, updates: { replyText: text, status: 'replied' } });
       toast('Queued — will sync', 'ok');
       r.replyText = text; r.status = 'replied';
     } else {
@@ -2232,7 +2266,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // ═══════════════════════════════════════════════════════
 // DASHBOARD PANEL — period-aware with % comparison
 // ═══════════════════════════════════════════════════════
-state.dashPeriod = 'month'; // default
+state.dashPeriod = 'window'; // default — whole loaded window (15 days)
 
 // Period toggle — event delegation on the stable panel element so listeners
 // survive any innerHTML replacement inside the panel on re-renders.
@@ -2248,31 +2282,30 @@ document.getElementById('panelDashboard').addEventListener('click', e => {
 function _periodRange(period) {
   const now = new Date();
   let curStart, curEnd, prevStart, prevEnd;
-  if (period === 'week') {
-    // current 7 days vs previous 7 days
+  if (period === 'today') {
+    // today vs yesterday
+    curStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    curEnd    = now.getTime();
+    prevEnd   = curStart - 1;
+    prevStart = curStart - 86400000;
+  } else if (period === 'week') {
+    // last 7 days vs the 7 days before (both inside the 15-day window)
     const ms7 = 7 * 86400000;
     curEnd   = now.getTime();
     curStart = curEnd - ms7;
     prevEnd  = curStart;
     prevStart = prevEnd - ms7;
-  } else if (period === 'month') {
-    // current calendar month vs previous calendar month
-    curStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    curEnd   = now.getTime();
-    const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    prevStart = prevM.getTime();
-    prevEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999).getTime();
   } else {
-    // YTD: Jan 1 this year vs Jan 1 last year to Dec 31 last year
-    curStart  = new Date(now.getFullYear(), 0, 1).getTime();
+    // whole loaded window — nothing older is loaded, so no comparison
     curEnd    = now.getTime();
-    prevStart = new Date(now.getFullYear() - 1, 0, 1).getTime();
-    prevEnd   = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).getTime();
+    curStart  = curEnd - (state.windowDays || 15) * 86400000;
+    prevStart = prevEnd = 0;
   }
   return { curStart, curEnd, prevStart, prevEnd };
 }
 
 function _reviewTimestamp(r) {
+  if (r.ts) return Number(r.ts);
   if (r.timestamp && !isNaN(Number(r.timestamp))) return Number(r.timestamp);
   if (r.date) { const d = Date.parse(r.date); if (!isNaN(d)) return d; }
   return null;
@@ -2330,8 +2363,8 @@ function renderDashboardPanel() {
   const { curStart, curEnd, prevStart, prevEnd } = _periodRange(state.dashPeriod);
   const cur  = _filterByRange(all, curStart, curEnd);
   const prev = _filterByRange(all, prevStart, prevEnd);
-  const plLabel = state.dashPeriod === 'week' ? 'This week' : state.dashPeriod === 'month' ? 'This month' : 'YTD';
-  const pvLabel = state.dashPeriod === 'week' ? 'prev week' : state.dashPeriod === 'month' ? 'last month' : 'last year';
+  const noCompare = state.dashPeriod === 'window';
+  const pvLabel = state.dashPeriod === 'today' ? 'yesterday' : 'prev 7 days';
 
   // ① Platform health cards ────────────────────────────
   const platDefs = [
@@ -2352,7 +2385,8 @@ function renderDashboardPanel() {
         badge = (diff > 0 ? '▲ +' : '▼ ') + Math.abs(diff).toFixed(2) + ' vs ' + pvLabel;
         badgeCls = diff > 0 ? 'up' : 'down';
       } else { badge = '— same as ' + pvLabel; }
-    } else if (cD && !pD) { badge = '▲ first data'; badgeCls = 'up'; }
+    } else if (cD && noCompare) { badge = cD.count + ' review' + (cD.count === 1 ? '' : 's'); }
+    else if (cD && !pD) { badge = '▲ first data'; badgeCls = 'up'; }
     else { badge = '— no reviews'; }
     const total = all.filter(r => r.platform === p.key).length;
     return `
@@ -2369,8 +2403,8 @@ function renderDashboardPanel() {
   // Reviews received
   const d1 = _deltaLabel(cur.length, prev.length);
   $('#stTotal').textContent     = cur.length.toLocaleString();
-  $('#stTotalDelta').textContent = d1.text + ' vs ' + pvLabel;
-  $('#stTotalDelta').className   = 'kpi-delta ' + d1.cls;
+  $('#stTotalDelta').textContent = noCompare ? 'last ' + (state.windowDays || 15) + ' days' : d1.text + ' vs ' + pvLabel;
+  $('#stTotalDelta').className   = 'kpi-delta ' + (noCompare ? 'flat' : d1.cls);
 
   // Response rate
   const curReplied  = cur.filter(r => r.status === 'replied').length;
@@ -2379,16 +2413,16 @@ function renderDashboardPanel() {
   const prevRate = prev.length ? Math.round(prevReplied / prev.length * 100) : 0;
   const d2 = _deltaLabel(curRate, prevRate);
   $('#stRespRate').textContent      = curRate + '%';
-  $('#stRespRateDelta').textContent = curReplied + ' of ' + cur.length + ' · ' + d2.text;
-  $('#stRespRateDelta').className   = 'kpi-delta ' + d2.cls;
+  $('#stRespRateDelta').textContent = curReplied + ' of ' + cur.length + (noCompare ? '' : ' · ' + d2.text);
+  $('#stRespRateDelta').className   = 'kpi-delta ' + (noCompare ? 'flat' : d2.cls);
 
   // Low star alerts (1-2★)
   const curLow  = cur.filter(r  => Number(r.rating) <= 2).length;
   const prevLow = prev.filter(r => Number(r.rating) <= 2).length;
   const d3 = _deltaLabel(curLow, prevLow, false); // lower is better
   $('#stLowStar').textContent      = curLow.toLocaleString();
-  $('#stLowStarDelta').textContent = d3.text + ' vs ' + pvLabel;
-  $('#stLowStarDelta').className   = 'kpi-delta ' + d3.cls;
+  $('#stLowStarDelta').textContent = noCompare ? '1–2★ reviews' : d3.text + ' vs ' + pvLabel;
+  $('#stLowStarDelta').className   = 'kpi-delta ' + (noCompare ? 'flat' : d3.cls);
 
   // Unread (current state)
   const unread = all.filter(r => !r.read).length;
@@ -2398,41 +2432,21 @@ function renderDashboardPanel() {
   // ③ Stacked activity chart ───────────────────────────
   const day = 86400000;
   let buckets = [];
-  if (state.dashPeriod === 'week') {
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(curEnd - i * day);
-      const s = new Date(d); s.setHours(0,0,0,0);
-      const e = new Date(d); e.setHours(23,59,59,999);
-      const slice = _filterByRange(all, +s, +e);
-      const pc = {};
-      ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
-      buckets.push({ label: d.toLocaleDateString('en-US',{weekday:'short'}), total: slice.length, pc });
-    }
-    $('#dashActivityLabel').textContent = 'Daily activity — this week';
-  } else if (state.dashPeriod === 'month') {
-    const now2 = new Date();
-    const days = new Date(now2.getFullYear(), now2.getMonth()+1, 0).getDate();
-    for (let d = 1; d <= days; d++) {
-      const s = new Date(now2.getFullYear(), now2.getMonth(), d, 0,0,0,0);
-      const e = new Date(now2.getFullYear(), now2.getMonth(), d, 23,59,59,999);
-      const slice = _filterByRange(all, +s, +e);
-      const pc = {};
-      ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
-      buckets.push({ label: String(d), total: slice.length, pc });
-    }
-    $('#dashActivityLabel').textContent = 'Daily activity — ' + new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  } else {
-    const now2 = new Date();
-    for (let m = 0; m <= now2.getMonth(); m++) {
-      const s = new Date(now2.getFullYear(), m, 1);
-      const e = new Date(now2.getFullYear(), m+1, 0, 23,59,59,999);
-      const slice = _filterByRange(all, +s, +e);
-      const pc = {};
-      ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
-      buckets.push({ label: s.toLocaleDateString('en-US',{month:'short'}), total: slice.length, pc });
-    }
-    $('#dashActivityLabel').textContent = 'Monthly activity — ' + new Date().getFullYear();
+  // Daily bars: 7 days for Today / 7 Days, the whole window for 15 Days
+  const nDays = state.dashPeriod === 'window' ? (state.windowDays || 15) : 7;
+  for (let i = nDays - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * day);
+    const s = new Date(d); s.setHours(0,0,0,0);
+    const e = new Date(d); e.setHours(23,59,59,999);
+    const slice = _filterByRange(all, +s, +e);
+    const pc = {};
+    ['google','zomato','swiggy','heebee'].forEach(p => { pc[p] = slice.filter(r => r.platform===p).length; });
+    const label = nDays <= 7
+      ? d.toLocaleDateString('en-US',{weekday:'short'})
+      : d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    buckets.push({ label, total: slice.length, pc });
   }
+  $('#dashActivityLabel').textContent = 'Daily activity — last ' + nDays + ' days';
   const maxA = Math.max(1, ...buckets.map(b => b.total));
   $('#dashActivity').innerHTML = buckets.map(b => `
     <div class="bar-row">
@@ -2951,9 +2965,9 @@ function _showIntelSummary(period) {
     if (btn) btn.classList.toggle('on', p.toLowerCase() === period);
   });
   const now = Date.now();
-  const cutoff = period === 'week' ? 7*86400000 : 30*86400000;
+  const cutoff = period === 'week' ? 7*86400000 : (state.windowDays || 15)*86400000;
   const slice = (state.reviews||[]).filter(r => { const t=_reviewTimestamp(r); return t && (now-t)<=cutoff; });
-  const label = period === 'week' ? 'Last 7 Days' : 'Last 30 Days';
+  const label = period === 'week' ? 'Last 7 Days' : 'Last ' + (state.windowDays || 15) + ' Days';
   const el = document.getElementById('intelSummary');
   el.innerHTML = _intelSummaryText(slice, label);
   el.classList.add('show');

@@ -3,6 +3,12 @@
 Apple-inspired luxury UI for the Heebee customer review intelligence platform.
 Frontend on GitHub Pages, Google Apps Script as the backend API.
 
+> **Backend (v3):** the Apps Script code lives in `gas/Reviews.gs`. It replaces the top part of the
+> GAS project's `Code.gs` (everything above `SLACK INTEGRATION (Phase D)`) and the old API layer at the
+> bottom. The Slack / Zomato pipeline code stays in `Code.gs`. Only the last `REVIEW_WINDOW_DAYS`
+> (Config sheet, default 15) days of reviews are loaded. Run `diagnoseReviewHub()` in the editor to see
+> what each source returns. After any change: Deploy → Manage deployments → Edit → New version.
+
 ---
 
 ## What's in this repo

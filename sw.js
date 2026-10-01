@@ -6,7 +6,7 @@
 //   - Background Sync: queue failed POSTs, retry when back online
 //   - Push: low-rated review notifications
 
-const CACHE_VERSION = 'heebee-rev-v1.0';
+const CACHE_VERSION = 'heebee-rev-v3.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
