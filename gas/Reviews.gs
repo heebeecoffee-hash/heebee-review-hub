@@ -877,3 +877,47 @@ function diagnoseReviewHub() {
   console.log('Payload size: ' + Math.round(JSON.stringify(feed).length / 1024) + ' KB');
   writeFeedCache_(feed);
 }
+
+// ══════════════════════════════════════════════════════
+// SOURCE DEBUG — where are the Zomato emails and form responses going?
+// ══════════════════════════════════════════════════════
+function debugSources() {
+  // 1. QR form spreadsheet — every tab, its size and newest timestamp
+  const formId = getConfig('FORM_SHEET_ID');
+  console.log('━━━ QR FORM (' + formId + ') ━━━');
+  try {
+    const fss = SpreadsheetApp.openById(formId);
+    console.log('Spreadsheet: "' + fss.getName() + '"');
+    fss.getSheets().forEach((sh, i) => {
+      const last = sh.getLastRow();
+      const newest = last > 1 ? sh.getRange(last, 1).getValue() : '—';
+      console.log('  tab ' + i + ' "' + sh.getName() + '": ' + Math.max(0, last - 1) + ' rows, newest: ' + newest + (i === 0 ? '   ← app reads this tab' : ''));
+    });
+    const form = fss.getFormUrl();
+    console.log('  linked form: ' + (form || 'NONE — no form is sending responses here'));
+  } catch (e) { console.log('  ❌ ' + e.message); }
+
+  // 2. Gmail labels used by the Zomato importer
+  console.log('━━━ GMAIL LABELS ━━━');
+  ['ZomatoReviews', 'ZomatoReviewsProcessed'].forEach(n => {
+    const l = GmailApp.getUserLabelByName(n);
+    console.log('  ' + n + ': ' + (l ? l.getThreads(0, 100).length + ' threads (max 100 shown)' : 'MISSING'));
+  });
+
+  // 3. Any Zomato review emails in the last 15 days, whatever their label
+  console.log('━━━ ZOMATO REVIEW EMAILS, LAST 15 DAYS ━━━');
+  const threads = GmailApp.search('newer_than:15d (from:zomato.com OR from:zomato) review', 0, 25);
+  console.log('  found ' + threads.length + ' thread(s)');
+  threads.slice(0, 15).forEach(t => {
+    const m = t.getMessages()[0];
+    const labels = t.getLabels().map(l => l.getName()).join(', ') || 'no label';
+    const parsed = parseZomatoEmail(m);
+    console.log('  [' + Utilities.formatDate(m.getDate(), 'Asia/Kolkata', 'd MMM HH:mm') + '] ' + m.getSubject() +
+      '\n     from: ' + m.getFrom() + ' · labels: ' + labels + ' · parser: ' + (parsed ? '✓ ' + parsed.rating + '★' : '✗ skipped'));
+  });
+
+  // 4. Swiggy, just to see if anything arrives
+  const sw = GmailApp.search('newer_than:15d from:swiggy review', 0, 10);
+  console.log('━━━ SWIGGY REVIEW EMAILS, LAST 15 DAYS: ' + sw.length + ' ━━━');
+  sw.slice(0, 5).forEach(t => console.log('  ' + t.getFirstMessageSubject()));
+}
