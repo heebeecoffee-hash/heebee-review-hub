@@ -219,6 +219,10 @@ body::after {
 .ai-item { padding:12px 14px; border-radius:14px; border:1px solid var(--border, rgba(0,0,0,.08)); cursor:pointer;
   background:var(--surface2, transparent); transition:border-color .15s; }
 .ai-item:hover { border-color:var(--gold); }
+.ai-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.ai-chip { font-size:.68rem; padding:4px 10px; border-radius:20px; border:1px solid var(--border, rgba(0,0,0,.1)); color:var(--text2); }
+.ai-chip.neg { border-color:rgba(198,40,40,.35); }
+.ai-chip.pos { border-color:rgba(46,125,50,.35); }
 .ai-tone { font-family:'Space Mono',monospace; font-size:.55rem; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
 .ai-text { font-size:.8rem; line-height:1.5; color:var(--text2); }
 
@@ -1269,6 +1273,7 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
   <button class="install-dismiss" id="installDismiss">×</button>
 </div>
 
+<script src="brain.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -2148,7 +2153,7 @@ function openReply(id) {
           <div class="tpl-text">${esc((t.text || '').slice(0,140))}${(t.text || '').length > 140 ? '…' : ''}</div>
         </div>`).join('') || '<div style="font-size:.75rem;color:var(--text3);">No templates yet.</div>'}
     </div>
-    <button class="btn btn-ghost ai-btn" id="aiBtn" onclick="suggestAiReplies('${esc(r.id)}')">✨ Reply with AI</button>
+    <button class="btn btn-ghost ai-btn" id="aiBtn" onclick="suggestAiReplies('${esc(r.id)}')">✨ Smart reply</button>
     <div id="aiBox"></div>
     <div class="section-label">Your reply</div>
     <textarea class="tarea" id="replyArea" placeholder="Write your response…">${esc(r.replyText || '')}</textarea>
@@ -2160,31 +2165,35 @@ function openReply(id) {
   `);
 }
 
-// ── AI reply suggestions (Claude, via the Apps Script backend) ──
-window.suggestAiReplies = async function(id) {
-  const box = $('#aiBox'), btn = $('#aiBtn');
-  if (!box) return;
-  btn.disabled = true;
-  box.innerHTML = progressHtml();
-  const prog = startProgress(box, 12000, [[0, 'Reading the review'], [30, 'Writing replies'], [75, 'Polishing']]);
-  try {
-    const res = await api('suggestReplies', { id }, 90000);
-    if (!res.ok) throw new Error(res.error || 'AI failed');
-    prog.done();
-    state.aiSuggestions = res.suggestions || [];
-    if (!$('#aiBox')) return;   // modal closed meanwhile
-    $('#aiBox').innerHTML = `<div class="section-label">AI suggestions — tap one to use it</div>
-      <div class="ai-list">${state.aiSuggestions.map((sg, i) => `
-        <div class="ai-item" onclick="useAiReply(${i})">
-          <div class="ai-tone">${esc(sg.tone)}</div>
-          <div class="ai-text">${esc(sg.text)}</div>
-        </div>`).join('')}</div>`;
-    btn.textContent = '✨ Suggestions ready';
-  } catch (e) {
-    prog.fail();
-    if ($('#aiBox')) $('#aiBox').innerHTML = `<div class="feedback err" style="margin-bottom:10px">${esc(e.message)}</div>`;
-    btn.disabled = false;
-  }
+// ── Smart replies — offline reply brain (brain.js), no external AI ──
+window.suggestAiReplies = function(id, seed) {
+  const r = state.reviews.find(x => String(x.id) === String(id));
+  const box = $('#aiBox');
+  if (!r || !box || !window.ReplyBrain) return;
+  state.aiSeed = seed || 0;
+  const { analysis: a, suggestions } = ReplyBrain.suggest(r, state.aiSeed);
+  const tpl = ReplyBrain.matchTemplate(r, state.templates);
+  state.aiSuggestions = tpl ? suggestions.concat([{ tone: 'Your template · ' + tpl.name, text: tpl.text }]) : suggestions;
+
+  const label = k => (ReplyBrain.TOPICS.find(t => t.key === k) || {}).label || k;
+  const chips = [
+    ...a.complained.map(k => `<span class="ai-chip neg">😞 ${esc(label(k))}</span>`),
+    ...a.praised.map(k => `<span class="ai-chip pos">🙂 ${esc(label(k))}</span>`),
+    ...a.staff.map(n => `<span class="ai-chip">👤 ${esc(n)}</span>`),
+    a.hinglish ? '<span class="ai-chip">🗣 Hinglish</span>' : ''
+  ].join('') || '<span class="ai-chip">No specific topic — general reply</span>';
+
+  box.innerHTML = `<div class="section-label">What the brain noticed</div>
+    <div class="ai-chips">${chips}</div>
+    <div class="section-label">Suggestions — tap one to use it</div>
+    <div class="ai-list">${state.aiSuggestions.map((sg, i) => `
+      <div class="ai-item" onclick="useAiReply(${i})">
+        <div class="ai-tone">${esc(sg.tone)}</div>
+        <div class="ai-text">${esc(sg.text)}</div>
+      </div>`).join('')}</div>`;
+  const btn = $('#aiBtn');
+  btn.textContent = '↻ More ideas';
+  btn.onclick = () => suggestAiReplies(id, state.aiSeed + 1);
 };
 
 window.useAiReply = function(i) {

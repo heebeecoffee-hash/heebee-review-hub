@@ -790,117 +790,11 @@ function apiVerifyBiometric(email, credentialId) {
 }
 
 // ══════════════════════════════════════════════════════
-// AI REPLY SUGGESTIONS  (Claude API)
-// Setup: Project Settings → Script Properties → add ANTHROPIC_API_KEY.
-// Only the review itself is sent — never the customer's phone or email.
-// ══════════════════════════════════════════════════════
-const AI_MODEL = 'claude-opus-5';
-
-const AI_REPLY_SCHEMA = {
-  type: 'object',
-  properties: {
-    suggestions: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          tone: { type: 'string' },
-          text: { type: 'string' }
-        },
-        required: ['tone', 'text'],
-        additionalProperties: false
-      }
-    }
-  },
-  required: ['suggestions'],
-  additionalProperties: false
-};
-
-function buildReplyPrompt_(r) {
-  const branch = { b1: 'Sarabha Nagar', b2: 'Ghumar Mandi', b3: 'Model Town' }[r.branch] || r.branch;
-  const platform = { google: 'Google', zomato: 'Zomato', swiggy: 'Swiggy', heebee: 'our in-store QR feedback form' }[r.platform] || r.platform;
-  const firstName = String(r.reviewer || '').trim().split(/\s+/)[0] || '';
-  const examples = fetchTemplates().slice(0, 8).map(t => '- ' + t.name + ': ' + t.text).join('\n');
-  const isPublic = r.platform !== 'heebee';
-
-  const system = [
-    'You write replies to customer reviews for Heebee Coffee, a specialty café brand in Ludhiana, Punjab, India.',
-    'Voice: warm, genuine, specific to what the customer said, never corporate or defensive. Sound like a caring café manager, not a bot.',
-    isPublic
-      ? 'This reply is posted publicly on ' + platform + ', so other potential customers will read it. Never mention refunds, compensation, staff names, or internal processes publicly; for serious complaints invite the customer to continue privately.'
-      : 'This reply goes privately to the customer (by WhatsApp), so it can be more personal.',
-    'Reply in the same language the customer used (English, Hindi, Punjabi, or Hinglish). Keep each reply between 2 and 4 sentences.',
-    'Address the customer by first name if one is given. Refer to concrete details from their review. Do not invent facts about the café, menu, or offers.',
-    'Return exactly 3 suggestions with different tones, for example "Warm", "Apologetic", "Short & sweet" — pick the three tones that best fit this review.',
-    examples ? 'The team\'s existing reply templates, for tone reference only (do not copy them word for word):\n' + examples : ''
-  ].filter(Boolean).join('\n\n');
-
-  const user = 'Platform: ' + platform + '\nOutlet: ' + branch +
-    '\nCustomer first name: ' + (firstName || '(none)') +
-    '\nRating: ' + (r.unrated ? 'not given' : r.rating + ' / 5') +
-    '\nReview:\n"""\n' + String(r.text || '').substring(0, 3000) + '\n"""';
-  return { system: system, user: user };
-}
-
-function apiSuggestReplies(reviewId) {
-  const key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-  if (!key) return { ok: false, error: 'AI replies are not set up yet — add ANTHROPIC_API_KEY in Apps Script → Project Settings → Script Properties.' };
-
-  const r = fetchAllReviews().find(x => String(x.id) === String(reviewId));
-  if (!r) return { ok: false, error: 'Review not found (it may be older than the review window).' };
-
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'ai_reply_' + _sha256(String(reviewId) + '|' + r.text).substring(0, 32);
-  const hit = cache.get(cacheKey);
-  if (hit) return { ok: true, suggestions: JSON.parse(hit), cached: true };
-
-  const p = buildReplyPrompt_(r);
-  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'server-side-fallback-2026-07-01'
-    },
-    payload: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 4000,
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: AI_REPLY_SCHEMA } },
-      system: p.system,
-      messages: [{ role: 'user', content: p.user }]
-    }),
-    muteHttpExceptions: true
-  });
-
-  const code = res.getResponseCode();
-  let body;
-  try { body = JSON.parse(res.getContentText()); } catch (e) { body = {}; }
-  if (code !== 200) {
-    const msg = body.error && body.error.message ? body.error.message : res.getContentText().substring(0, 160);
-    return { ok: false, error: 'AI request failed (' + code + '): ' + msg };
-  }
-  if (body.stop_reason === 'refusal') return { ok: false, error: 'The AI declined to write a reply for this review — please write it manually.' };
-
-  const textBlock = (body.content || []).find(b => b.type === 'text');
-  if (!textBlock) return { ok: false, error: 'AI returned no text' + (body.stop_reason ? ' (' + body.stop_reason + ')' : '') };
-
-  let suggestions;
-  try { suggestions = JSON.parse(textBlock.text).suggestions || []; }
-  catch (e) { return { ok: false, error: 'AI returned an unreadable answer — try again.' }; }
-  suggestions = suggestions.filter(s => s && s.text).slice(0, 3);
-
-  cache.put(cacheKey, JSON.stringify(suggestions), 21600);
-  return { ok: true, suggestions: suggestions };
-}
-
-// ══════════════════════════════════════════════════════
 // HTTP API
 // ══════════════════════════════════════════════════════
 function doGet(e) {
   if (e && e.parameter && e.parameter.action === 'ping') return _json({ ok: true, time: new Date().toISOString() });
-  return _json({ ok: true, service: 'Heebee Review Hub API', version: 'v3.1' });
+  return _json({ ok: true, service: 'Heebee Review Hub API', version: 'v3' });
 }
 
 function doPost(e) {
@@ -957,7 +851,6 @@ function handleApi(p) {
       case 'updateReview':     return _normalize(updateReview(p.id, p.updates || {}, user.email));
       case 'saveManualReview': return _normalize(saveManualReview(p.review || {}));
       case 'postGoogleReply':  return _normalize(postGoogleReply(p.reviewId, p.replyText, p.branch, p.ref));
-      case 'suggestReplies':   return apiSuggestReplies(p.id);
       case 'clearCache':       clearReviewsCache(); return { ok: true };
       case 'registerBiometric': return apiRegisterBiometric(user.email, p.credentialId);
       default:                 return { ok: false, error: 'Unknown action: ' + p.action };
@@ -1027,4 +920,56 @@ function debugSources() {
   const sw = GmailApp.search('newer_than:15d from:swiggy review', 0, 10);
   console.log('━━━ SWIGGY REVIEW EMAILS, LAST 15 DAYS: ' + sw.length + ' ━━━');
   sw.slice(0, 5).forEach(t => console.log('  ' + t.getFirstMessageSubject()));
+}
+
+// ══════════════════════════════════════════════════════
+// SAMPLE EXPORT — anonymised review text for tuning the reply brain.
+// Writes to the "Review_Samples" tab. No names, phones or emails.
+// ══════════════════════════════════════════════════════
+function exportReviewSamples() {
+  const rows = [['Source', 'Branch', 'Rating', 'Date', 'Review', 'OwnerReply']];
+  const clean = s => String(s || '').replace(/\s+/g, ' ').trim().substring(0, 1500);
+
+  // 1. Google — newest 500 per outlet, with any existing owner reply
+  const token = getGMBAccessToken();
+  const account = getConfig('GMB_ACCOUNT_ID');
+  BRANCHES.forEach(b => {
+    const loc = getConfig('GMB_LOCATION_ID_' + b);
+    if (!loc) return;
+    let pageToken = null, pages = 0;
+    do {
+      const url = 'https://mybusiness.googleapis.com/v4/' + account + '/' + loc + '/reviews?pageSize=50' +
+                  (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) { console.log('Google ' + b + ' HTTP ' + res.getResponseCode()); break; }
+      const data = JSON.parse(res.getContentText());
+      (data.reviews || []).forEach(r => {
+        if (!r.comment) return;
+        rows.push(['google', b, convertGMBRating(r.starRating), String(r.createTime).substring(0, 10),
+                   clean(r.comment), clean(r.reviewReply && r.reviewReply.comment)]);
+      });
+      pageToken = data.nextPageToken; pages++;
+    } while (pageToken && pages < 10);
+  });
+
+  // 2. QR form — feedback + suggestion text only
+  const form = SpreadsheetApp.openById(getConfig('FORM_SHEET_ID')).getSheets()[0];
+  readTail_(form, 1500, 14).rows.forEach(r => {
+    const text = [r[12], r[13] ? 'Suggestion: ' + r[13] : ''].filter(Boolean).join(' · ');
+    if (String(text).trim().length < 3) return;
+    rows.push(['form', mapFormBranch(String(r[6] || '')), r[10] === '' ? '' : parseRating(r[10]),
+               r[0] ? Utilities.formatDate(new Date(r[0]), 'Asia/Kolkata', 'yyyy-MM-dd') : '', clean(text), '']);
+  });
+
+  // 3. Reviews sheet — Zomato / Swiggy
+  readTail_(SS.getSheetByName('Reviews'), 3000, 12).rows.forEach(r => {
+    if (!r[6]) return;
+    rows.push([String(r[1]).toLowerCase(), r[2], r[4],
+               r[5] ? Utilities.formatDate(new Date(r[5]), 'Asia/Kolkata', 'yyyy-MM-dd') : '', clean(r[6]), clean(r[10])]);
+  });
+
+  let sheet = SS.getSheetByName('Review_Samples');
+  if (!sheet) sheet = SS.insertSheet('Review_Samples'); else sheet.clear();
+  sheet.getRange(1, 1, rows.length, 6).setValues(rows);
+  console.log('Wrote ' + (rows.length - 1) + ' reviews to Review_Samples. Now: File → Download → CSV.');
 }

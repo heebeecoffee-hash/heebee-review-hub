@@ -6,11 +6,12 @@
 //   - Background Sync: queue failed POSTs, retry when back online
 //   - Push: low-rated review notifications
 
-const CACHE_VERSION = 'heebee-rev-v3.0';
+const CACHE_VERSION = 'heebee-rev-v3.1';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './brain.js'
 ];
 
 // ── INSTALL ──────────────────────────────────────────
