@@ -1621,7 +1621,22 @@ function updateSyncLine() {
 }
 setInterval(updateSyncLine, 60000);
 
+// Templates live in the "Templates" tab of the backend sheet
+async function loadTemplates() {
+  state.templatesError = null;
+  try {
+    const r = await api('fetchTemplates', {}, 60000);
+    if (!r.ok) throw new Error(r.error || 'Failed');
+    state.templates = r.templates || [];
+  } catch (e) {
+    state.templatesError = e.message || 'Could not load templates';
+  }
+  state.templatesLoaded = true;
+  if (state.panel === 'templates') renderTemplatesPanel();
+}
+
 async function loadAll(opts) {
+  loadTemplates();   // in parallel with reviews
   // ── Step 1: Show cache INSTANTLY (feels instant) ─────
   const cache = loadReviewsCache();
   if (cache && cache.reviews && cache.reviews.length) {
@@ -1669,7 +1684,7 @@ async function loadAll(opts) {
   hideLoadHint();
 
   // ── Step 4: Templates + Intelligence (background) ─────
-  api('fetchTemplates').then(r => { if (r.ok) state.templates = r.templates || []; }).catch(() => {});
+  loadTemplates();
 }
 
 // Progressive render: show 5 instantly, stream rest frame-by-frame
@@ -2032,7 +2047,7 @@ function openReply(id) {
     <div class="section-label">Templates</div>
     <div class="tpl-list" id="tplList">
       ${(state.templates || []).map(t => `
-        <div class="tpl-item" onclick="useTemplate(${esc(t.id)})">
+        <div class="tpl-item" onclick="useTemplate('${esc(t.id)}')">
           <div class="tpl-name">${esc(t.name)}</div>
           <div class="tpl-text">${esc((t.text || '').slice(0,140))}${(t.text || '').length > 140 ? '…' : ''}</div>
         </div>`).join('') || '<div style="font-size:.75rem;color:var(--text3);">No templates yet.</div>'}
@@ -2118,6 +2133,7 @@ async function postReply(id, isGoogle) {
 
 // expose for inline handlers
 window.closeModal = closeModal;
+window.loadTemplates = loadTemplates;
 window.openReview = openReview;
 window.openReply = openReply;
 window.saveNote = saveNote;
@@ -3044,11 +3060,15 @@ function renderTemplatesPanel() {
   const grid = $('#tplGrid');
   const tpls = state.templates || [];
   if (!tpls.length) {
+    const title = state.templatesError ? 'Could not load templates'
+                : !state.templatesLoaded ? 'Loading templates…' : 'No templates yet';
+    const msg = state.templatesError ? esc(state.templatesError) + ' — <a href="#" onclick="loadTemplates();return false">retry</a>'
+              : 'Add quick-reply templates to speed up responses.';
     grid.innerHTML = `
       <div class="glass empty">
         <span class="empty-icon">✎</span>
-        <div class="empty-title">No templates yet</div>
-        <div class="empty-msg">Add quick-reply templates to speed up responses.</div>
+        <div class="empty-title">${title}</div>
+        <div class="empty-msg">${msg}</div>
       </div>`;
     return;
   }
