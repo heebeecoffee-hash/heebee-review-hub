@@ -201,6 +201,27 @@ body::after {
 .feedback.err   { color:var(--danger); }
 .feedback.muted { color:var(--text3); }
 
+/* Percentage loader (estimated — Apps Script gives no real progress) */
+.prog { margin-top:14px; }
+.prog-track { height:4px; border-radius:4px; background:var(--border, rgba(0,0,0,.08)); overflow:hidden; }
+.prog-fill { height:100%; width:0; background:linear-gradient(90deg,var(--gold),var(--gold2)); border-radius:4px; transition:width .25s ease-out; }
+.prog-row { display:flex; justify-content:space-between; margin-top:7px; font-family:'Space Mono',monospace;
+  font-size:.58rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); }
+.prog-pct { color:var(--gold); font-weight:700; }
+#topProgress { position:fixed; top:0; left:0; right:0; z-index:9999; pointer-events:none; display:none; }
+#topProgress .prog-track { height:3px; border-radius:0; }
+#topProgress .prog-row { justify-content:center; gap:10px; margin:0 auto; width:max-content; padding:5px 12px;
+  border-radius:0 0 10px 10px; background:var(--surface, #fff); box-shadow:0 2px 10px rgba(0,0,0,.08); }
+
+/* AI reply suggestions */
+.ai-btn { display:inline-flex; align-items:center; gap:6px; margin:4px 0 10px; }
+.ai-list { display:grid; gap:8px; margin-bottom:12px; }
+.ai-item { padding:12px 14px; border-radius:14px; border:1px solid var(--border, rgba(0,0,0,.08)); cursor:pointer;
+  background:var(--surface2, transparent); transition:border-color .15s; }
+.ai-item:hover { border-color:var(--gold); }
+.ai-tone { font-family:'Space Mono',monospace; font-size:.55rem; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
+.ai-text { font-size:.8rem; line-height:1.5; color:var(--text2); }
+
 /* USER STRIP */
 .user-strip { display:flex; align-items:center; justify-content:space-between;
   padding:12px 16px; margin:6px 0 8px; }
@@ -975,6 +996,9 @@ body.dark  .dash-sticky  { background:rgba(10,10,15,.6); }
     </div>
   </div>
 
+  <div id="topProgress"><div class="prog-track"><div class="prog-fill"></div></div>
+    <div class="prog-row"><span class="prog-label"></span><span class="prog-pct">0%</span></div></div>
+
   <!-- ── DASHBOARD ───────────────────────────────── -->
   <div id="dashView" style="display:none;">
 
@@ -1368,6 +1392,55 @@ async function apiOnce(action, payload, timeoutMs) {
   }
 }
 
+// ═══════════════════════════════════════════════════════
+// PROGRESS — estimated % loader. Apps Script can't report real progress, so
+// the bar eases toward 95% over the expected time and jumps to 100% on finish.
+// stages: [[pct, label], …] — label shown once the bar passes pct.
+// ═══════════════════════════════════════════════════════
+function progressHtml() {
+  return `<div class="prog"><div class="prog-track"><div class="prog-fill"></div></div>
+    <div class="prog-row"><span class="prog-label"></span><span class="prog-pct">0%</span></div></div>`;
+}
+
+function startProgress(root, expectedMs, stages) {
+  if (!root) return { done() {}, fail() {} };
+  const fill = root.querySelector('.prog-fill'), pctEl = root.querySelector('.prog-pct'),
+        labelEl = root.querySelector('.prog-label');
+  const t0 = Date.now(), tau = expectedMs / 2.2;
+  let pct = 0, stopped = false;
+  const paint = (p, label) => {
+    fill.style.width = p + '%';
+    pctEl.textContent = Math.round(p) + '%';
+    if (label) labelEl.textContent = label;
+  };
+  const tick = () => {
+    if (stopped) return;
+    const elapsed = Date.now() - t0;
+    pct = Math.max(pct, 95 * (1 - Math.exp(-elapsed / tau)));
+    let label = stages[0][1];
+    stages.forEach(([at, l]) => { if (pct >= at) label = l; });
+    if (elapsed > expectedMs * 2.5) label = 'Google is slow right now — still working…';
+    paint(pct, label);
+    requestAnimationFrame(tick);
+  };
+  tick();
+  return {
+    done(label) { stopped = true; paint(100, label || 'Done'); },
+    fail() { stopped = true; fill.style.width = '0%'; pctEl.textContent = ''; labelEl.textContent = ''; }
+  };
+}
+
+// Fixed bar at the top of the page (used while reviews load)
+function topProgress(expectedMs, stages) {
+  const el = $('#topProgress');
+  el.style.display = 'block';
+  const p = startProgress(el, expectedMs, stages);
+  return {
+    done() { p.done('Ready'); setTimeout(() => { el.style.display = 'none'; }, 600); },
+    fail() { p.fail(); el.style.display = 'none'; }
+  };
+}
+
 // Queue for failed writes (offline / failed)
 function getQueue()  { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; } }
 function setQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
@@ -1463,19 +1536,24 @@ async function doLogin() {
     return;
   }
   $('#loginBtn').disabled = true;
-  fb.className = 'feedback muted'; fb.textContent = 'Signing in…';
+  fb.className = 'feedback muted';
+  fb.innerHTML = progressHtml();
+  const prog = startProgress(fb, 5000, [[0, 'Connecting to server'], [35, 'Checking your details'], [75, 'Almost there']]);
   try {
     const res = await api('login', { email, pin });
     if (!res.ok) {
+      prog.fail();
       fb.className = 'feedback err';
       fb.textContent = res.error || 'Login failed';
       $('#loginBtn').disabled = false;
       return;
     }
+    prog.done('Signed in');
     saveSession({ token: res.token, user: res.user, expiresAt: res.expiresAt });
     fb.className = 'feedback ok'; fb.textContent = 'Welcome';
     setTimeout(enterApp, 200);
   } catch (e) {
+    prog.fail();
     fb.className = 'feedback err';
     fb.textContent = e.message || 'Network error';
     $('#loginBtn').disabled = false;
@@ -1674,6 +1752,7 @@ async function loadAll(opts) {
 
   // ── Step 2: one call returns reviews + ratings + source health ───
   showLoadHint(state.reviews.length ? '↻ Loading latest reviews…' : 'Loading reviews…');
+  const bar = topProgress(5000, [[0, 'Connecting'], [30, 'Loading reviews'], [70, 'Building dashboard']]);
   try {
     const revRes = await api(opts && opts.force ? 'refreshReviews' : 'fetchReviews', {}, 120000)
       .catch(e => ({ ok: false, _err: e }));
@@ -1699,10 +1778,9 @@ async function loadAll(opts) {
     else showLoadHint('Showing cached data');
   }
 
+  bar.done();
   hideLoadHint();
 
-  // ── Step 4: Templates + Intelligence (background) ─────
-  loadTemplates();
 }
 
 // Progressive render: show 5 instantly, stream rest frame-by-frame
@@ -2070,6 +2148,8 @@ function openReply(id) {
           <div class="tpl-text">${esc((t.text || '').slice(0,140))}${(t.text || '').length > 140 ? '…' : ''}</div>
         </div>`).join('') || '<div style="font-size:.75rem;color:var(--text3);">No templates yet.</div>'}
     </div>
+    <button class="btn btn-ghost ai-btn" id="aiBtn" onclick="suggestAiReplies('${esc(r.id)}')">✨ Reply with AI</button>
+    <div id="aiBox"></div>
     <div class="section-label">Your reply</div>
     <textarea class="tarea" id="replyArea" placeholder="Write your response…">${esc(r.replyText || '')}</textarea>
     ${isGoogle ? '<div style="font-size:.66rem;color:var(--text3);margin-top:6px;letter-spacing:.5px;">✓ Posts live to Google</div>' : ''}
@@ -2079,6 +2159,38 @@ function openReply(id) {
     </div>
   `);
 }
+
+// ── AI reply suggestions (Claude, via the Apps Script backend) ──
+window.suggestAiReplies = async function(id) {
+  const box = $('#aiBox'), btn = $('#aiBtn');
+  if (!box) return;
+  btn.disabled = true;
+  box.innerHTML = progressHtml();
+  const prog = startProgress(box, 12000, [[0, 'Reading the review'], [30, 'Writing replies'], [75, 'Polishing']]);
+  try {
+    const res = await api('suggestReplies', { id }, 90000);
+    if (!res.ok) throw new Error(res.error || 'AI failed');
+    prog.done();
+    state.aiSuggestions = res.suggestions || [];
+    if (!$('#aiBox')) return;   // modal closed meanwhile
+    $('#aiBox').innerHTML = `<div class="section-label">AI suggestions — tap one to use it</div>
+      <div class="ai-list">${state.aiSuggestions.map((sg, i) => `
+        <div class="ai-item" onclick="useAiReply(${i})">
+          <div class="ai-tone">${esc(sg.tone)}</div>
+          <div class="ai-text">${esc(sg.text)}</div>
+        </div>`).join('')}</div>`;
+    btn.textContent = '✨ Suggestions ready';
+  } catch (e) {
+    prog.fail();
+    if ($('#aiBox')) $('#aiBox').innerHTML = `<div class="feedback err" style="margin-bottom:10px">${esc(e.message)}</div>`;
+    btn.disabled = false;
+  }
+};
+
+window.useAiReply = function(i) {
+  const sg = (state.aiSuggestions || [])[i];
+  if (sg && $('#replyArea')) { $('#replyArea').value = sg.text; $('#replyArea').focus(); }
+};
 
 window.useTemplate = function(tplId) {
   const t = state.templates.find(x => String(x.id) === String(tplId));
