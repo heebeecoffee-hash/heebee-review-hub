@@ -1319,7 +1319,25 @@ function toast(msg, type = '') {
 // ═══════════════════════════════════════════════════════
 // API LAYER (fetch wrapper)
 // ═══════════════════════════════════════════════════════
+// Apps Script sometimes answers 404/5xx or drops the connection when Google is
+// slow. These actions are safe to send twice, so they get retried.
+const RETRY_SAFE = new Set(['ping','login','verifySession','verifyBiometric','fetchReviews',
+  'refreshReviews','fetchTemplates','fetchRatings','updateReview','postGoogleReply','deleteTemplate']);
+
 async function api(action, payload = {}, timeoutMs = 180000) {
+  const tries = RETRY_SAFE.has(action) ? 3 : 1;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await apiOnce(action, payload, timeoutMs);
+    } catch (e) {
+      const transient = /^HTTP (404|429|5\d\d)$/.test(e.message) || e.name === 'TypeError';
+      if (!transient || attempt >= tries) throw e;
+      await new Promise(r => setTimeout(r, 800 * attempt));
+    }
+  }
+}
+
+async function apiOnce(action, payload, timeoutMs) {
   const body = Object.assign({ action }, payload);
   if (state.session && state.session.token) body.token = state.session.token;
 
